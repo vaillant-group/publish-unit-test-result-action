@@ -7,19 +7,9 @@
     'output': {
       'title': '3 fail, 6 pass in 0s',
       'summary':
-        '9 tests\u2002\u2003\u20036 '
-        '[:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-re'
-        'sult-action/blob/v1.20/README.md#the-symbols "passed tests")\u2003\u2003'
-        '0s '
-        '[:stopwatch:](https://github.com/EnricoMi/publish-unit-test-result-ac'
-        'tion/blob/v1.20/README.md#the-symbols "duration of all tests")\n3 '
-        'suites\u2003\u20030 '
-        '[:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/b'
-        'lob/v1.20/README.md#the-symbols "skipped / disabled tests")\n1 files\u2004'
-        '\u2002\u2003\u20033 '
-        '[:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blo'
-        'b/v1.20/README.md#the-symbols "failed tests")\n\nResults for commit '
-        'commit s.\n\n'
+        '9 tests\u2002\u2003\u20036 ✅\u2003\u20030s ⏱️\n3 suites\u2003\u20030 '
+        '💤\n1 files\u2004\u2002\u2003\u20033 ❌\n\nResults for commit commit '
+        's.\n\n'
         '[test-results]:data:application/gzip;base64,H4sIAAAAAAAC/02MywqAIBREf'
         '0VctyiCoH5GxIwu+YirrqJ/72ZK7ubMDOfiGxgd+MKGjvGQIGYYCdaEMoJ3hD0hDfGd5p'
         'pFSEpRMf3FAWf7FpsEU2xfoRE9lgsmV31vbHUf/7bMjSxz61LeWogEJbGwS34/WLAikt0'
@@ -30,7 +20,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'warning',
-          'message': 'nunit3/jenkins/NUnit-issue5674.xml',
+          'message': 'nunit3/jenkins/NUnit-issue5674.xml\u2003[took 0s]',
           'title': 'GetBrowsersTest.BrowserNamesTest1.FailTest("IE") failed',
           'raw_details':
             'at GetBrowsersTest.BrowserNamesTest1.FailTest(String browser) in '
@@ -43,7 +33,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'warning',
-          'message': 'nunit3/jenkins/NUnit-issue5674.xml',
+          'message': 'nunit3/jenkins/NUnit-issue5674.xml\u2003[took 0s]',
           'title': 'GetBrowsersTest.BrowserNamesTest1.FailTest("FireFox") failed',
           'raw_details':
             'at GetBrowsersTest.BrowserNamesTest1.FailTest(String browser) in '
@@ -56,7 +46,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'warning',
-          'message': 'nunit3/jenkins/NUnit-issue5674.xml',
+          'message': 'nunit3/jenkins/NUnit-issue5674.xml\u2003[took 0s]',
           'title': 'GetBrowsersTest.BrowserNamesTest1.FailTest("Safari") failed',
           'raw_details':
             'at GetBrowsersTest.BrowserNamesTest1.FailTest(String browser) in '

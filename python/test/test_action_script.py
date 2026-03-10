@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import io
 import json
-import logging
 import os
 import pathlib
+import platform
 import re
 import sys
 import tempfile
@@ -12,16 +14,16 @@ from typing import Optional, Union, List, Type
 import mock
 from packaging.version import Version
 
-from publish import pull_request_build_mode_merge, fail_on_mode_failures, fail_on_mode_errors, \
-    fail_on_mode_nothing, comment_modes, comment_mode_always,\
-    report_suite_out_log, report_suite_err_log, report_suite_logs, report_no_suite_logs, default_report_suite_logs, \
+from publish import __version__, pull_request_build_mode_merge, fail_on_mode_failures, fail_on_mode_errors, \
+    fail_on_mode_nothing, comment_modes, comment_mode_always, report_suite_out_log, report_suite_err_log, \
+    report_suite_logs, report_no_suite_logs, default_report_suite_logs, \
     default_annotations, all_tests_list, skipped_tests_list, none_annotations, \
     pull_request_build_modes, punctuation_space
 from publish.github_action import GithubAction
 from publish.unittestresults import UnitTestSuite, ParsedUnitTestResults, ParseError
 from publish_test_results import action_fail_required, get_conclusion, get_commit_sha, get_var, \
     check_var, check_var_condition, deprecate_var, deprecate_val, log_parse_errors, \
-    get_settings, get_annotations_config, Settings, get_files, throttle_gh_request_raw, is_float, parse_files, \
+    get_settings, get_annotations_config, Settings, get_files, is_float, parse_files, \
     main, prettify_glob_pattern
 from test_utils import chdir
 
@@ -163,9 +165,11 @@ class Test(unittest.TestCase):
                      api_url='http://github.api.url/',
                      graphql_url='http://github.graphql.url/',
                      retries=2,
+                     ssl_verify: bool | str=True,
                      event={},
                      event_file=None,
                      event_name='event name',
+                     is_fork=False,
                      repo='repo',
                      commit='commit',
                      fail_on_errors=True,
@@ -178,9 +182,11 @@ class Test(unittest.TestCase):
                      xunit_files_glob='xunit-files',
                      trx_files_glob='trx-files',
                      time_factor=1.0,
+                     test_file_prefix=None,
                      check_name='check name',
                      comment_title='title',
                      comment_mode=comment_mode_always,
+                     check_run=True,
                      job_summary=True,
                      compare_earlier=True,
                      test_changes_limit=10,
@@ -194,6 +200,7 @@ class Test(unittest.TestCase):
                      check_run_annotation=default_annotations,
                      seconds_between_github_reads=1.5,
                      seconds_between_github_writes=2.5,
+                     secondary_rate_limit_wait_seconds=6.0,
                      json_file=None,
                      json_thousands_separator=punctuation_space,
                      json_suite_details=False,
@@ -204,9 +211,11 @@ class Test(unittest.TestCase):
             api_url=api_url,
             graphql_url=graphql_url,
             api_retries=retries,
+            ssl_verify=ssl_verify,
             event=event.copy(),
             event_file=event_file,
             event_name=event_name,
+            is_fork=is_fork,
             repo=repo,
             commit=commit,
             json_file=json_file,
@@ -223,9 +232,11 @@ class Test(unittest.TestCase):
             xunit_files_glob=xunit_files_glob,
             trx_files_glob=trx_files_glob,
             time_factor=time_factor,
+            test_file_prefix=test_file_prefix,
             check_name=check_name,
             comment_title=comment_title,
             comment_mode=comment_mode,
+            check_run=check_run,
             job_summary=job_summary,
             compare_earlier=compare_earlier,
             pull_request_build=pull_request_build,
@@ -239,7 +250,8 @@ class Test(unittest.TestCase):
             check_run_annotation=check_run_annotation.copy(),
             seconds_between_github_reads=seconds_between_github_reads,
             seconds_between_github_writes=seconds_between_github_writes,
-            search_pull_requests=search_pull_requests
+            secondary_rate_limit_wait_seconds=secondary_rate_limit_wait_seconds,
+            search_pull_requests=search_pull_requests,
         )
 
     def test_get_settings(self):
@@ -263,6 +275,11 @@ class Test(unittest.TestCase):
 
             self.do_test_get_settings(EVENT_FILE=filepath, expected=self.get_settings(event=event, event_file=filepath))
 
+    def test_get_settings_github_token(self):
+        self.do_test_get_settings(GITHUB_TOKEN='token-one', expected=self.get_settings(token='token-one'))
+        self.do_test_get_settings(GITHUB_TOKEN='token-two', expected=self.get_settings(token='token-two'))
+        # see test_get_settings_missing_github_vars
+
     def test_get_settings_github_api_url(self):
         self.do_test_get_settings(GITHUB_API_URL='https://api.github.onpremise.com', expected=self.get_settings(api_url='https://api.github.onpremise.com'))
         self.do_test_get_settings(GITHUB_API_URL=None, expected=self.get_settings(api_url='https://api.github.com'))
@@ -282,6 +299,16 @@ class Test(unittest.TestCase):
                 with self.assertRaises(RuntimeError) as re:
                     self.do_test_get_settings(GITHUB_RETRIES=retries, expected=None)
                 self.assertIn(f'GITHUB_RETRIES must be a positive integer or 0: {retries}', re.exception.args)
+
+    def test_get_settings_github_ssl_verify(self):
+        self.do_test_get_settings(SSL_VERIFY='true', expected=self.get_settings(ssl_verify=True))
+        self.do_test_get_settings(SSL_VERIFY='True', expected=self.get_settings(ssl_verify=True))
+        self.do_test_get_settings(SSL_VERIFY='TrUe', expected=self.get_settings(ssl_verify=True))
+        self.do_test_get_settings(SSL_VERIFY='false', expected=self.get_settings(ssl_verify=False))
+        self.do_test_get_settings(SSL_VERIFY='False', expected=self.get_settings(ssl_verify=False))
+        self.do_test_get_settings(SSL_VERIFY='FaLsE', expected=self.get_settings(ssl_verify=False))
+        self.do_test_get_settings(SSL_VERIFY='/path/to/cert', expected=self.get_settings(ssl_verify='/path/to/cert'))
+        self.do_test_get_settings(SSL_VERIFY=None, expected=self.get_settings(ssl_verify=True))
 
     def test_get_settings_any_files(self):
         for files in [None, 'file']:
@@ -338,13 +365,23 @@ class Test(unittest.TestCase):
         self.assertIn('TIME_UNIT minutes is not supported. It is optional, '
                       'but when given must be one of these values: seconds, milliseconds', re.exception.args)
 
+    def test_get_settings_test_file_prefix(self):
+        self.do_test_get_settings(TEST_FILE_PREFIX=None, expected=self.get_settings(test_file_prefix=None))
+        self.do_test_get_settings(TEST_FILE_PREFIX='', expected=self.get_settings(test_file_prefix=None))
+        self.do_test_get_settings(TEST_FILE_PREFIX='+src/', expected=self.get_settings(test_file_prefix='+src/'))
+        self.do_test_get_settings(TEST_FILE_PREFIX='-./', expected=self.get_settings(test_file_prefix='-./'))
+
+        with self.assertRaises(RuntimeError) as re:
+            self.do_test_get_settings(TEST_FILE_PREFIX='path/', expected=None)
+        self.assertIn("TEST_FILE_PREFIX is optional, but when given, it must start with '-' or '+': path/", re.exception.args)
+
     def test_get_settings_commit(self):
         event = {'pull_request': {'head': {'sha': 'sha2'}}}
-        self.do_test_get_settings(INPUT_COMMIT='sha', GITHUB_EVENT_NAME='pull_request', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='sha', event=event, event_name='pull_request'))
-        self.do_test_get_settings(COMMIT='sha', GITHUB_EVENT_NAME='pull_request', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='sha', event=event, event_name='pull_request'))
-        self.do_test_get_settings(COMMIT=None, GITHUB_EVENT_NAME='pull_request', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='sha2', event=event, event_name='pull_request'))
-        self.do_test_get_settings(COMMIT=None, INPUT_GITHUB_EVENT_NAME='pull_request', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='sha2', event=event, event_name='pull_request'))
-        self.do_test_get_settings(COMMIT=None, GITHUB_EVENT_NAME='push', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='default', event=event, event_name='push'))
+        self.do_test_get_settings(INPUT_COMMIT='sha', GITHUB_EVENT_NAME='pull_request', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='sha', event=event, event_name='pull_request', is_fork=True))
+        self.do_test_get_settings(COMMIT='sha', GITHUB_EVENT_NAME='pull_request', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='sha', event=event, event_name='pull_request', is_fork=True))
+        self.do_test_get_settings(COMMIT=None, GITHUB_EVENT_NAME='pull_request', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='sha2', event=event, event_name='pull_request', is_fork=True))
+        self.do_test_get_settings(COMMIT=None, INPUT_GITHUB_EVENT_NAME='pull_request', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='sha2', event=event, event_name='pull_request', is_fork=True))
+        self.do_test_get_settings(COMMIT=None, GITHUB_EVENT_NAME='push', event=event, GITHUB_SHA='default', expected=self.get_settings(commit='default', event=event, event_name='push', is_fork=False))
         with self.assertRaises(RuntimeError) as re:
             self.do_test_get_settings(COMMIT=None, GITHUB_EVENT_NAME='pull_request', event={}, GITHUB_SHA='default', expected=None)
         self.assertIn('Commit SHA must be provided via action input or environment variable COMMIT, GITHUB_SHA or event file', re.exception.args)
@@ -429,6 +466,15 @@ class Test(unittest.TestCase):
         self.do_test_get_settings(COMPARE_TO_EARLIER_COMMIT='foo', expected=self.get_settings(compare_earlier=True), warning=warning, exception=RuntimeError)
         self.do_test_get_settings(COMPARE_TO_EARLIER_COMMIT=None, expected=self.get_settings(compare_earlier=True))
 
+    def test_get_settings_check_run(self):
+        warning = 'Option check_run has to be boolean, so either "true" or "false": foo'
+        self.do_test_get_settings(CHECK_RUN='false', expected=self.get_settings(check_run=False))
+        self.do_test_get_settings(CHECK_RUN='False', expected=self.get_settings(check_run=False))
+        self.do_test_get_settings(CHECK_RUN='true', expected=self.get_settings(check_run=True))
+        self.do_test_get_settings(CHECK_RUN='True', expected=self.get_settings(check_run=True))
+        self.do_test_get_settings(CHECK_RUN='foo', expected=self.get_settings(check_run=True), warning=warning, exception=RuntimeError)
+        self.do_test_get_settings(CHECK_RUN=None, expected=self.get_settings(check_run=True))
+
     def test_get_settings_job_summary(self):
         warning = 'Option job_summary has to be boolean, so either "true" or "false": foo'
         self.do_test_get_settings(JOB_SUMMARY='false', expected=self.get_settings(job_summary=False))
@@ -507,19 +553,28 @@ class Test(unittest.TestCase):
         self.assertEqual("Some values in 'all tests, skipped tests, more' are not supported for variable CHECK_RUN_ANNOTATIONS, allowed: all tests, skipped tests, none", str(re.exception))
 
     def test_get_settings_seconds_between_github_reads(self):
-        self.do_test_get_settings_seconds_between_github_requests('SECONDS_BETWEEN_GITHUB_READS', 'seconds_between_github_reads', 1.0)
+        self.do_test_get_settings_seconds('SECONDS_BETWEEN_GITHUB_READS', 'seconds_between_github_reads', 1.0)
 
     def test_get_settings_seconds_between_github_writes(self):
-        self.do_test_get_settings_seconds_between_github_requests('SECONDS_BETWEEN_GITHUB_WRITES', 'seconds_between_github_writes', 2.0)
+        self.do_test_get_settings_seconds('SECONDS_BETWEEN_GITHUB_WRITES', 'seconds_between_github_writes', 2.0)
 
-    def do_test_get_settings_seconds_between_github_requests(self, env_var_name: str, settings_var_name: str, default: float):
+    def test_get_settings_secondary_rate_limit_wait_seconds(self):
+        self.do_test_get_settings_seconds('SECONDARY_RATE_LIMIT_WAIT_SECONDS', 'secondary_rate_limit_wait_seconds', 60)
+
+    def do_test_get_settings_seconds(self, env_var_name: str, settings_var_name: str, default: float):
         self.do_test_get_settings(**{env_var_name: '0.001', 'expected': self.get_settings(**{settings_var_name: 0.001})})
         self.do_test_get_settings(**{env_var_name: '1', 'expected': self.get_settings(**{settings_var_name: 1.0})})
         self.do_test_get_settings(**{env_var_name: '1.0', 'expected': self.get_settings(**{settings_var_name: 1.0})})
         self.do_test_get_settings(**{env_var_name: '2.5', 'expected': self.get_settings(**{settings_var_name: 2.5})})
         self.do_test_get_settings(**{env_var_name: None, 'expected': self.get_settings(**{settings_var_name: default})})
 
-        for val in ['0', '0.0', '-1', 'none', '12e']:
+        for val in ['none', '12e']:
+            with self.subTest(reads=val):
+                with self.assertRaises(RuntimeError) as re:
+                    self.do_test_get_settings(**{env_var_name: val, 'expected': None})
+                self.assertIn(f'{env_var_name} must be an integer or float number: {val}', re.exception.args)
+
+        for val in ['0', '0.0', '-1']:
             with self.subTest(reads=val):
                 with self.assertRaises(RuntimeError) as re:
                     self.do_test_get_settings(**{env_var_name: val, 'expected': None})
@@ -576,6 +631,14 @@ class Test(unittest.TestCase):
             self.do_test_get_settings(GITHUB_REPOSITORY=None)
         self.assertEqual('GitHub repository must be provided via action input or environment variable GITHUB_REPOSITORY', str(re.exception))
 
+    def test_get_settings_fork(self):
+        event = {"pull_request": {"head": {"repo": {"full_name": "fork/repo"}}}}
+        self.do_test_get_settings(event=event,
+                                  EVENT_NAME='pull_request',
+                                  GITHUB_REPOSITORY='repo',
+                                  expected=self.get_settings(is_fork=True, event=event, event_name='pull_request'),
+                                  warning=[])
+
     def do_test_get_settings_no_default_files(self,
                                               event: dict = {},
                                               gha: Optional[GithubAction] = None,
@@ -625,7 +688,8 @@ class Test(unittest.TestCase):
                 DEDUPLICATE_CLASSES_BY_FILE_NAME='true',  # false unless 'true'
                 # annotations config tested in test_get_annotations_config*
                 SECONDS_BETWEEN_GITHUB_READS='1.5',
-                SECONDS_BETWEEN_GITHUB_WRITES='2.5'
+                SECONDS_BETWEEN_GITHUB_WRITES='2.5',
+                SECONDARY_RATE_LIMIT_WAIT_SECONDS='6.0',
             )
 
             # provide event via GITHUB_EVENT_PATH when there is no EVENT_FILE given
@@ -749,7 +813,7 @@ class Test(unittest.TestCase):
                     with open(filename, mode='w'):
                         pass
 
-                files = get_files('file1.txt')
+                files, _ = get_files('file1.txt')
                 self.assertEqual(['file1.txt'], sorted(files))
 
     def test_get_files_multi(self):
@@ -762,7 +826,7 @@ class Test(unittest.TestCase):
                             with open(filename, mode='w'):
                                 pass
 
-                        files = get_files(f'file1.txt{sep}file2.txt')
+                        files, _ = get_files(f'file1.txt{sep}file2.txt')
                         self.assertEqual(['file1.txt', 'file2.txt'], sorted(files))
 
     def test_get_files_single_wildcard(self):
@@ -775,7 +839,7 @@ class Test(unittest.TestCase):
                             with open(filename, mode='w'):
                                 pass
 
-                        files = get_files(wildcard)
+                        files, _ = get_files(wildcard)
                         self.assertEqual(['file1.txt', 'file2.txt'], sorted(files))
 
     def test_get_files_multi_wildcard(self):
@@ -788,8 +852,9 @@ class Test(unittest.TestCase):
                             with open(filename, mode='w'):
                                 pass
 
-                        files = get_files(f'*1.txt{sep}*3.bin')
+                        files, absolute = get_files(f'*1.txt{sep}*3.bin')
                         self.assertEqual(['file1.txt', 'file3.bin'], sorted(files))
+                        self.assertFalse(absolute)
 
     def test_get_files_subdir_and_wildcard(self):
         filenames = [os.path.join('sub', 'file1.txt'),
@@ -805,7 +870,7 @@ class Test(unittest.TestCase):
                     with open(filename, mode='w'):
                         pass
 
-                files = get_files('sub/*.txt')
+                files, _ = get_files('sub/*.txt')
                 self.assertEqual([os.path.join('sub', 'file1.txt'),
                                   os.path.join('sub', 'file2.txt')], sorted(files))
 
@@ -830,7 +895,7 @@ class Test(unittest.TestCase):
                             with open(filename, mode='w'):
                                 pass
 
-                        files = get_files(pattern)
+                        files, _ = get_files(pattern)
                         self.assertEqual(sorted(expected), sorted(files))
 
     def test_get_files_symlinks(self):
@@ -849,7 +914,7 @@ class Test(unittest.TestCase):
                                 pass
                         os.symlink(os.path.join(path, 'sub2'), os.path.join(path, 'sub1', 'sub2'), target_is_directory=True)
 
-                        files = get_files(pattern)
+                        files, _ = get_files(pattern)
                         self.assertEqual(sorted(expected), sorted(files))
 
     def test_get_files_character_range(self):
@@ -860,7 +925,7 @@ class Test(unittest.TestCase):
                     with open(filename, mode='w'):
                         pass
 
-                files = get_files('file[0-2].*')
+                files, _ = get_files('file[0-2].*')
                 self.assertEqual(['file1.txt', 'file2.txt'], sorted(files))
 
     def test_get_files_multi_match(self):
@@ -871,7 +936,7 @@ class Test(unittest.TestCase):
                     with open(filename, mode='w'):
                         pass
 
-                files = get_files('*.txt\nfile*.txt\nfile2.*')
+                files, _ = get_files('*.txt\nfile*.txt\nfile2.*')
                 self.assertEqual(['file1.txt', 'file2.txt'], sorted(files))
 
     def test_get_files_absolute_path_and_wildcard(self):
@@ -882,8 +947,9 @@ class Test(unittest.TestCase):
                     with open(filename, mode='w'):
                         pass
 
-                files = get_files(os.path.join(path, '*'))
+                files, absolute = get_files(os.path.join(path, '*'))
                 self.assertEqual([os.path.join(path, file) for file in filenames], sorted(files))
+                self.assertTrue(absolute)
 
     def test_get_files_exclude_only(self):
         filenames = ['file1.txt', 'file2.txt', 'file3.bin']
@@ -893,7 +959,7 @@ class Test(unittest.TestCase):
                     with open(filename, mode='w'):
                         pass
 
-                files = get_files('!file*.txt')
+                files, _ = get_files('!file*.txt')
                 self.assertEqual([], sorted(files))
 
     def test_get_files_include_and_exclude(self):
@@ -904,12 +970,12 @@ class Test(unittest.TestCase):
                     with open(filename, mode='w'):
                         pass
 
-                files = get_files('*.txt\n!file1.txt')
+                files, _ = get_files('*.txt\n!file1.txt')
                 self.assertEqual(['file2.txt'], sorted(files))
 
     def test_get_files_with_mock(self):
         with mock.patch('publish_test_results.glob') as m:
-            files = get_files('*.txt\n!file1.txt')
+            files, _ = get_files('*.txt\n!file1.txt')
             self.assertEqual([], files)
             self.assertEqual([mock.call('*.txt', recursive=True), mock.call('file1.txt', recursive=True)], m.call_args_list)
 
@@ -922,7 +988,10 @@ class Test(unittest.TestCase):
 
     def test_parse_files(self):
         gha = mock.MagicMock()
-        settings = self.get_settings(files_glob='\n'.join([str(test_files_path / '**' / '*.xml'), str(test_files_path / '**' / '*.trx'), str(test_files_path / '**' / '*.json')]),
+        settings = self.get_settings(files_glob='\n'.join([str(test_files_path / '**' / '*.xml'),
+                                                           str(test_files_path / '**' / '*.trx'),
+                                                           str(test_files_path / '**' / '*.json'),
+                                                           "!" + str(test_files_path / '**' / '*.results.json')]),
                                      junit_files_glob=str(test_files_path / 'junit-xml' / '**' / '*.xml'),
                                      nunit_files_glob=str(test_files_path / 'nunit' / '**' / '*.xml'),
                                      xunit_files_glob=str(test_files_path / 'xunit' / '**' / '*.xml'),
@@ -934,12 +1003,12 @@ class Test(unittest.TestCase):
                 print(call.args[0])
 
             self.assertEqual(17, len(l.info.call_args_list))
-            self.assertTrue(any([call.args[0].startswith(f"Reading files {prettify_glob_pattern(settings.files_glob)} (76 files, ") for call in l.info.call_args_list]))
-            self.assertTrue(any([call.args[0].startswith(f'Reading JUnit XML files {prettify_glob_pattern(settings.junit_files_glob)} (28 files, ') for call in l.info.call_args_list]))
+            self.assertTrue(any([call.args[0].startswith(f"Reading files {prettify_glob_pattern(settings.files_glob)} (77 files, ") for call in l.info.call_args_list]))
+            self.assertTrue(any([call.args[0].startswith(f'Reading JUnit XML files {prettify_glob_pattern(settings.junit_files_glob)} (29 files, ') for call in l.info.call_args_list]))
             self.assertTrue(any([call.args[0].startswith(f'Reading NUnit XML files {prettify_glob_pattern(settings.nunit_files_glob)} (24 files, ') for call in l.info.call_args_list]))
             self.assertTrue(any([call.args[0].startswith(f'Reading XUnit XML files {prettify_glob_pattern(settings.xunit_files_glob)} (8 files, ') for call in l.info.call_args_list]))
             self.assertTrue(any([call.args[0].startswith(f'Reading TRX files {prettify_glob_pattern(settings.trx_files_glob)} (9 files, ') for call in l.info.call_args_list]))
-            self.assertTrue(any([call.args[0].startswith(f'Detected 27 JUnit XML files (') for call in l.info.call_args_list]))
+            self.assertTrue(any([call.args[0].startswith(f'Detected 28 JUnit XML files (') for call in l.info.call_args_list]))
             self.assertTrue(any([call.args[0].startswith(f'Detected 24 NUnit XML files (') for call in l.info.call_args_list]))
             self.assertTrue(any([call.args[0].startswith(f'Detected 8 XUnit XML files (') for call in l.info.call_args_list]))
             self.assertTrue(any([call.args[0].startswith(f'Detected 9 TRX files (') for call in l.info.call_args_list]))
@@ -951,7 +1020,7 @@ class Test(unittest.TestCase):
             self.assertTrue(any([call.args[0].endswith(f'python{os.sep}test{os.sep}files{os.sep}junit-xml{os.sep}non-junit.xml') for call in l.info.call_args_list]))
             self.assertTrue(any([call.args[0].endswith(f'python{os.sep}test{os.sep}files{os.sep}json{os.sep}non-json.json') for call in l.info.call_args_list]))
             self.assertTrue(any([call.args[0].endswith(f'python{os.sep}test{os.sep}files{os.sep}json{os.sep}malformed-json.json') for call in l.info.call_args_list]))
-            self.assertTrue(any([call.args[0].startswith(f'Finished reading 145 files in ') for call in l.info.call_args_list]))
+            self.assertTrue(any([call.args[0].startswith(f'Finished reading 147 files in ') for call in l.info.call_args_list]))
 
             for call in l.debug.call_args_list:
                 print(call.args[0])
@@ -971,42 +1040,35 @@ class Test(unittest.TestCase):
 
         self.assertEqual([], gha.method_calls)
 
-        self.assertEqual(145, actual.files)
-        if Version(sys.version.split(' ')[0]) >= Version('3.10.0') and sys.platform.startswith('darwin'):
-            # on macOS and Python 3.10 and above we see one particular error
-            self.assertEqual(17, len(actual.errors))
-            self.assertEqual(731, actual.suites)
-            self.assertEqual(4109, actual.suite_tests)
-            self.assertEqual(214, actual.suite_skipped)
-            self.assertEqual(450, actual.suite_failures)
-            self.assertEqual(21, actual.suite_errors)
-            self.assertEqual(7956, actual.suite_time)
-            self.assertEqual(0, len(actual.suite_details))
-            self.assertEqual(4085, len(actual.cases))
-        else:
-            self.assertEqual(13, len(actual.errors))
-            self.assertEqual(735, actual.suites)
-            self.assertEqual(4117, actual.suite_tests)
-            self.assertEqual(214, actual.suite_skipped)
-            self.assertEqual(454, actual.suite_failures)
-            self.assertEqual(21, actual.suite_errors)
-            self.assertEqual(7957, actual.suite_time)
-            self.assertEqual(0, len(actual.suite_details))
-            self.assertEqual(4093, len(actual.cases))
+        self.assertEqual(147, actual.files)
+        self.assertEqual(17, len(actual.errors))
+        self.assertEqual(733, actual.suites)
+        self.assertEqual(4111, actual.suite_tests)
+        self.assertEqual(214, actual.suite_skipped)
+        self.assertEqual(450, actual.suite_failures)
+        self.assertEqual(21, actual.suite_errors)
+        self.assertEqual(7959, actual.suite_time)
+        self.assertEqual(0, len(actual.suite_details))
+        self.assertEqual(4087, len(actual.cases))
         self.assertEqual('commit', actual.commit)
 
         with io.StringIO() as string:
             gha = GithubAction(file=string)
             with mock.patch('publish.github_action.logger') as m:
                 log_parse_errors(actual.errors, gha)
+            is_windows = sys.platform == 'win32'
             expected = [
                 # these occur twice, once from FILES and once from *_FILES options
                 "::error::lxml.etree.XMLSyntaxError: Premature end of data in tag skipped line 9, line 11, column 22",
                 "::error file=corrupt-xml.xml::Error processing result file: Premature end of data in tag skipped line 9, line 11, column 22 (corrupt-xml.xml, line 11)",
-                "::error::lxml.etree.XMLSyntaxError: Char 0x0 out of allowed range, line 33, column 16",
-                "::error file=NUnit-issue17521.xml::Error processing result file: Char 0x0 out of allowed range, line 33, column 16 (NUnit-issue17521.xml, line 33)",
+                "::error::lxml.etree.XMLSyntaxError: " + ("Char 0x0 out of allowed range, line 33, column 16" if is_windows else "Invalid character: Char 0x0 out of allowed range"),
+                "::error file=NUnit-issue17521.xml::Error processing result file: " + ("Char 0x0 out of allowed range, line 33, column 16 (NUnit-issue17521.xml, line 33)" if is_windows else "Invalid character: Char 0x0 out of allowed range"),
                 "::error::lxml.etree.XMLSyntaxError: attributes construct error, line 5, column 109",
-                "::error file=NUnit-issue47367.xml::Error processing result file: attributes construct error, line 5, column 109 (NUnit-issue47367.xml, line 5)"
+                "::error file=NUnit-issue47367.xml::Error processing result file: attributes construct error, line 5, column 109 (NUnit-issue47367.xml, line 5)",
+                "::error file=NUnit-sec1752-file.xml::Error processing result file: Entity 'xxe' not defined, line 17, column 51 (NUnit-sec1752-file.xml, line 17)",
+                "::error::lxml.etree.XMLSyntaxError: Entity 'xxe' not defined, line 17, column 51",
+                "::error file=NUnit-sec1752-https.xml::Error processing result file: Entity 'xxe' not defined, line 17, column 51 (NUnit-sec1752-https.xml, line 17)",
+                "::error::lxml.etree.XMLSyntaxError: Entity 'xxe' not defined, line 17, column 51",
             ] * 2 + [
                 # these occur once, either from FILES and or from *_FILES options
                 "::error::Exception: File is empty.",
@@ -1024,13 +1086,6 @@ class Test(unittest.TestCase):
                 '::error file=malformed-json.json::Error processing result file: Unsupported file format: malformed-json.json',
                 '::error file=non-json.json::Error processing result file: Unsupported file format: non-json.json',
             ]
-            if Version(sys.version.split(' ')[0]) >= Version('3.10.0') and sys.platform.startswith('darwin'):
-                expected.extend([
-                    '::error::lxml.etree.XMLSyntaxError: Failure to process entity xxe, line 17, column 51',
-                    '::error file=NUnit-sec1752-file.xml::Error processing result file: Failure to process entity xxe, line 17, column 51 (NUnit-sec1752-file.xml, line 17)',
-                    '::error::lxml.etree.XMLSyntaxError: Failure to process entity xxe, line 17, column 51',
-                    '::error file=NUnit-sec1752-https.xml::Error processing result file: Failure to process entity xxe, line 17, column 51 (NUnit-sec1752-https.xml, line 17)',
-                ] * 2)
             self.assertEqual(
                 sorted(expected),
                 sorted([re.sub(r'file=.*[/\\]', 'file=', re.sub(r'[(]file:.*/', '(', re.sub(r'format: .*[/\\]', 'format: ', line)))
@@ -1054,11 +1109,7 @@ class Test(unittest.TestCase):
                                              **options)
                 actual = parse_files(settings, gha)
 
-                if Version(sys.version.split(' ')[0]) >= Version('3.10.0') and sys.platform.startswith('darwin'):
-                    # on macOS and Python 3.10 and above we see one particular error
-                    self.assertEqual(363, len(actual.suite_details))
-                else:
-                    self.assertEqual(365, len(actual.suite_details))
+                self.assertEqual(364, len(actual.suite_details))
 
     def test_parse_files_no_matches(self):
         gha = mock.MagicMock()
@@ -1075,9 +1126,17 @@ class Test(unittest.TestCase):
 
         gha.warning.assert_has_calls([
             mock.call(f'Could not find any JUnit XML files for {missing_junit}'),
+            mock.call(f'Your file pattern contains absolute paths, please read the notes on absolute paths:'),
+            mock.call(f'https://github.com/EnricoMi/publish-unit-test-result-action/blob/{__version__}/README.md#running-with-absolute-paths'),
             mock.call(f'Could not find any NUnit XML files for {missing_nunit}'),
+            mock.call(f'Your file pattern contains absolute paths, please read the notes on absolute paths:'),
+            mock.call(f'https://github.com/EnricoMi/publish-unit-test-result-action/blob/{__version__}/README.md#running-with-absolute-paths'),
             mock.call(f'Could not find any XUnit XML files for {missing_xunit}'),
-            mock.call(f'Could not find any TRX files for {missing_trx}')
+            mock.call(f'Your file pattern contains absolute paths, please read the notes on absolute paths:'),
+            mock.call(f'https://github.com/EnricoMi/publish-unit-test-result-action/blob/{__version__}/README.md#running-with-absolute-paths'),
+            mock.call(f'Could not find any TRX files for {missing_trx}'),
+            mock.call(f'Your file pattern contains absolute paths, please read the notes on absolute paths:'),
+            mock.call(f'https://github.com/EnricoMi/publish-unit-test-result-action/blob/{__version__}/README.md#running-with-absolute-paths'),
         ])
         gha.error.assert_not_called()
 
@@ -1091,51 +1150,6 @@ class Test(unittest.TestCase):
         self.assertEqual(0, actual.suite_time)
         self.assertEqual(0, len(actual.cases))
         self.assertEqual('commit', actual.commit)
-
-    def test_throttle_gh_request_raw(self):
-        logging.root.level = logging.getLevelName('INFO')
-        logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)5s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S %z')
-
-        method = mock.Mock(return_value='response')
-        throttled_method = throttle_gh_request_raw(2, 5, method)
-
-        def test_request(verb: str, expected_sleep: Optional[float]):
-            with mock.patch('publish_test_results.time.sleep') as sleep:
-                response = throttled_method('cnx', verb, 'url', 'headers', 'input')
-
-                self.assertEqual('response', response)
-                method.assert_called_once_with('cnx', verb, 'url', 'headers', 'input')
-                method.reset_mock()
-
-                if expected_sleep is not None:
-                    sleep.assert_called_once()
-                    slept = sleep.call_args[0][0]
-                    self.assertLessEqual(slept, expected_sleep)
-                    self.assertGreater(slept, expected_sleep - 0.5)
-                else:
-                    sleep.assert_not_called()
-
-        test_request('GET', None)
-        test_request('GET', 2.0)
-        test_request('GET', 2.0)
-        test_request('POST', 2.0)
-        test_request('POST', 5.0)
-        test_request('POST', 5.0)
-        test_request('GET', 2.0)
-        # these five seconds are since last write, and they include the 2 seconds of last read,
-        # but those 2 seconds have not been waited so it still sleeps 5 seconds
-        test_request('POST', 5.0)
-
-    def test_throttle_gh_request_raw_exception(self):
-        def exc(*args, **kwargs):
-            raise RuntimeError('request fails')
-
-        method = mock.Mock(side_effect=exc)
-        throttled_method = throttle_gh_request_raw(2, 5, method)
-
-        with self.assertRaises(RuntimeError) as re:
-            throttled_method('cnx', 'GET', 'url', 'headers', 'input')
-        self.assertIn('request fails', re.exception.args)
 
     def test_is_float(self):
         for value, expected in [
@@ -1161,9 +1175,10 @@ class Test(unittest.TestCase):
                 GITHUB_EVENT_NAME='push',
                 GITHUB_REPOSITORY='repo',
                 EVENT_FILE=None,
-                FILES='\n'.join(str(path) for path in [test_files_path / '**' / '*.xml',
-                                                       test_files_path / '**' / '*.trx',
-                                                       test_files_path / '**' / '*.json']),
+                FILES='\n'.join(path for path in [str(test_files_path / '**' / '*.xml'),
+                                                  str(test_files_path / '**' / '*.trx'),
+                                                  str(test_files_path / '**' / '*.json'),
+                                                  "!" + str(test_files_path / '**' / '*.results.json')]),
                 JUNIT_FILES=str(test_files_path / 'junit-xml' / '**' / '*.xml'),
                 NUNIT_FILES=str(test_files_path / 'nunit' / '**' / '*.xml'),
                 XUNIT_FILES=str(test_files_path / 'xunit' / '**' / '*.xml'),
@@ -1181,19 +1196,13 @@ class Test(unittest.TestCase):
 
                 # Publisher.publish is expected to have been called with these arguments
                 results, cases, conclusion = m.call_args_list[0].args
-                self.assertEqual(145, results.files)
-                if Version(sys.version.split(' ')[0]) >= Version('3.10.0') and sys.platform.startswith('darwin'):
-                    # on macOS and Python 3.10 and above we see one particular error
-                    self.assertEqual(731, results.suites)
-                    self.assertEqual(731, len(results.suite_details))
-                    self.assertEqual(1811, len(cases))
-                else:
-                    self.assertEqual(735, results.suites)
-                    self.assertEqual(735, len(results.suite_details))
-                    self.assertEqual(1811, len(cases))
+                self.assertEqual(147, results.files)
+                self.assertEqual(733, results.suites)
+                self.assertEqual(733, len(results.suite_details))
+                self.assertEqual(1817, len(cases))
                 self.assertEqual('failure', conclusion)
 
-    def test_main_fork_pr_check(self):
+    def test_main_fork_pr_check_wo_summary(self):
         with tempfile.TemporaryDirectory() as path:
             filepath = os.path.join(path, 'file')
             with open(filepath, 'wt', encoding='utf-8') as file:
@@ -1206,7 +1215,8 @@ class Test(unittest.TestCase):
                 GITHUB_EVENT_PATH=file.name,
                 GITHUB_EVENT_NAME='pull_request',
                 GITHUB_REPOSITORY='repo',
-                EVENT_FILE=None
+                EVENT_FILE=None,
+                JOB_SUMMARY='false'
             ), gha)
 
             def do_raise(*args):
@@ -1219,9 +1229,9 @@ class Test(unittest.TestCase):
 
             gha.warning.assert_has_calls([
                 mock.call('This action is running on a pull_request event for a fork repository. '
-                          'It cannot do anything useful like creating check runs or pull request '
-                          'comments. To run the action on fork repository pull requests, see '
-                          'https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20'
+                          'The only useful thing it can do in this situation is creating a job summary, '
+                          'which is disabled in settings. To fully run the action on fork repository pull requests, '
+                          f'see https://github.com/EnricoMi/publish-unit-test-result-action/blob/{__version__}'
                           '/README.md#support-fork-repositories-and-dependabot-branches'),
                 mock.call('At least one of the FILES, JUNIT_FILES, NUNIT_FILES, XUNIT_FILES, '
                           'or TRX_FILES options has to be set! '
@@ -1284,12 +1294,12 @@ class Test(unittest.TestCase):
 
     def test_action_fail(self):
         for action_fail, action_fail_on_inconclusive, expecteds in [
-            (False, False, [False] * 3),
-            (False, True, [True, False, False]),
-            (True, False, [False, False, True]),
-            (True, True, [True, False, True]),
+            (False, False, [False] * 4),
+            (False, True, [True, False, False, False]),
+            (True, False, [False, False, True, False]),
+            (True, True, [True, False, True, False]),
         ]:
-            for expected, conclusion in zip(expecteds, ['inconclusive', 'success', 'failure']):
+            for expected, conclusion in zip(expecteds, ['neutral', 'success', 'failure', 'unknown']):
                 with self.subTest(action_fail=action_fail, action_fail_on_inconclusive=action_fail_on_inconclusive, conclusion=conclusion):
                     actual = action_fail_required(conclusion, action_fail, action_fail_on_inconclusive)
                     self.assertEqual(expected, actual)

@@ -7,23 +7,9 @@
     'output': {
       'title': '3 fail, 1 skipped, 1 pass in 8s',
       'summary':
-        '1 files\u2004\u20032 suites\u2004\u2003\u20028s '
-        '[:stopwatch:](https://github.com/EnricoMi/publish-unit-test-result-ac'
-        'tion/blob/v1.20/README.md#the-symbols "duration of all tests")\n5 '
-        'tests\u20031 '
-        '[:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-re'
-        'sult-action/blob/v1.20/README.md#the-symbols "passed tests")\u20031 '
-        '[:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/b'
-        'lob/v1.20/README.md#the-symbols "skipped / disabled tests")\u20033 '
-        '[:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blo'
-        'b/v1.20/README.md#the-symbols "failed tests")\n7 runs\u2006\u20033 '
-        '[:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-re'
-        'sult-action/blob/v1.20/README.md#the-symbols "passed tests")\u20031 '
-        '[:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/b'
-        'lob/v1.20/README.md#the-symbols "skipped / disabled tests")\u20033 '
-        '[:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blo'
-        'b/v1.20/README.md#the-symbols "failed tests")\n\nResults for commit '
-        'commit s.\n\n'
+        '1 files\u2004\u20032 suites\u2004\u2003\u20028s ⏱️\n5 tests\u20031 ✅\u2003'
+        '1 💤\u20033 ❌\n7 runs\u200a\u20033 ✅\u20031 💤\u20033 ❌\n\nResults for '
+        'commit commit s.\n\n'
         '[test-results]:data:application/gzip;base64,H4sIAAAAAAAC/1WMQQqAIBBFr'
         'yKuW1QSRZcJsaKh0hh1Fd29Scxs998b5p18hm2yvGdVwbj14ALUBKNH6cBowo6QDu45Ne'
         '8erFcqPkaxwvETs4SNhEhiQjRIpiSDXj+9Ns43JxJ/tcBZLHDeUmbfwRHExewi+XUDvcl'
@@ -34,7 +20,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'warning',
-          'message': 'mstest/fixie.xml',
+          'message': 'mstest/fixie.xml\u2003[took 1s]',
           'title': '1 out of 3 runs failed: ShouldBeString ([genericTestClass])',
           'raw_details':
             'Expected: System.String\nActual:   System.Int32   at '
@@ -46,7 +32,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'warning',
-          'message': 'mstest/fixie.xml',
+          'message': 'mstest/fixie.xml\u2003[took 1s]',
           'title': 'Fail ([testClass]) failed',
           'raw_details':
             "'Fail' failed!   at [testClassForStackTrace].Fail() in "
@@ -57,7 +43,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'warning',
-          'message': 'mstest/fixie.xml',
+          'message': 'mstest/fixie.xml\u2003[took 1s]',
           'title': 'FailByAssertion ([testClass]) failed',
           'raw_details':
             'Expected: 2\nActual:   1   at '

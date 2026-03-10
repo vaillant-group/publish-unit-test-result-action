@@ -7,21 +7,9 @@
     'output': {
       'title': '1 errors, 1 fail, 8 skipped, 18 pass in 0s',
       'summary':
-        '28 tests\u2002\u2003\u200318 '
-        '[:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-re'
-        'sult-action/blob/v1.20/README.md#the-symbols "passed tests")\u2003\u2003'
-        '0s '
-        '[:stopwatch:](https://github.com/EnricoMi/publish-unit-test-result-ac'
-        'tion/blob/v1.20/README.md#the-symbols "duration of all tests")\n11 '
-        'suites\u2003\u2003\u205f\u20048 '
-        '[:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/b'
-        'lob/v1.20/README.md#the-symbols "skipped / disabled tests")\n\u205f\u2004'
-        '1 files\u2004\u2002\u2003\u2003\u205f\u20041 '
-        '[:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blo'
-        'b/v1.20/README.md#the-symbols "failed tests")\u2003\u20031 '
-        '[:fire:](https://github.com/EnricoMi/publish-unit-test-result-action/'
-        'blob/v1.20/README.md#the-symbols "test errors")\n\nResults for '
-        'commit commit s.\n\n'
+        '28 tests\u2002\u2003\u200318 ✅\u2003\u20030s ⏱️\n11 suites\u2003\u2003\u2007'
+        '8 💤\n\u20071 files\u2004\u2002\u2003\u2003\u20071 ❌\u2003\u20031 🔥\n\n'
+        'Results for commit commit s.\n\n'
         '[test-results]:data:application/gzip;base64,H4sIAAAAAAAC/1WMMQ6AIAxFr'
         '0KYHdTJeBlDUGKjiGlhMt7dIqi49b3fvEMaWCeSvWgqISmATxBpDKg8uI25ZuTFx63tHh'
         'goaB2/C7PAzuYTRsGa60lMiA6zwbC9xXj/gkl8vZuL3M1lTTtrwTPkS9Cs5HkBSPFg+uI'
@@ -32,7 +20,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'warning',
-          'message': 'nunit3/jenkins/NUnit-correct.xml',
+          'message': 'nunit3/jenkins/NUnit-correct.xml\u2003[took 0s]',
           'title': 'NUnit.Tests.Assemblies.MockTestFixture.FailingTest failed',
           'raw_details':
             'Intentional failure\n\n                                              '
@@ -46,7 +34,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'failure',
-          'message': 'nunit3/jenkins/NUnit-correct.xml',
+          'message': 'nunit3/jenkins/NUnit-correct.xml\u2003[took 0s]',
           'title': 'NUnit.Tests.Assemblies.MockTestFixture.TestWithException with error',
           'raw_details':
             'System.ApplicationException : Intentional Exception\n\n              '

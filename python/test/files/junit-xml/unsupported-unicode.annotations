@@ -7,20 +7,8 @@
     'output': {
       'title': '2 errors, 2 fail, 2 skipped, 1 pass in 8s',
       'summary':
-        '7 tests\u2002\u2003\u20031 '
-        '[:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-re'
-        'sult-action/blob/v1.20/README.md#the-symbols "passed tests")\u2003\u2003'
-        '8s '
-        '[:stopwatch:](https://github.com/EnricoMi/publish-unit-test-result-ac'
-        'tion/blob/v1.20/README.md#the-symbols "duration of all tests")\n1 '
-        'suites\u2003\u20032 '
-        '[:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/b'
-        'lob/v1.20/README.md#the-symbols "skipped / disabled tests")\n1 files\u2004'
-        '\u2002\u2003\u20032 '
-        '[:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blo'
-        'b/v1.20/README.md#the-symbols "failed tests")\u2003\u20032 '
-        '[:fire:](https://github.com/EnricoMi/publish-unit-test-result-action/'
-        'blob/v1.20/README.md#the-symbols "test errors")\n\nResults for '
+        '7 tests\u2002\u2003\u20031 ✅\u2003\u20038s ⏱️\n1 suites\u2003\u20032 '
+        '💤\n1 files\u2004\u2002\u2003\u20032 ❌\u2003\u20032 🔥\n\nResults for '
         'commit commit s.\n\n'
         '[test-results]:data:application/gzip;base64,H4sIAAAAAAAC/1WMMQ6AIAxFr'
         '0KYXXTReBlDUGIjgikwGe9uQVDc/ntt3skV6MXxkbUN4y6Af2EOKDxYQzgQ0sHHU1/25I'
@@ -32,7 +20,7 @@
           'start_line': 4,
           'end_line': 4,
           'annotation_level': 'warning',
-          'message': 'unsupported-unicode.xml',
+          'message': 'unsupported-unicode.xml\u2003[took 1s]',
           'title': 'test 4 failed',
           'raw_details':
             'Some unsupported unicode characters: '
@@ -43,7 +31,7 @@
           'start_line': 5,
           'end_line': 5,
           'annotation_level': 'warning',
-          'message': 'unsupported-unicode.xml',
+          'message': 'unsupported-unicode.xml\u2003[took 1s]',
           'title': 'test 5 failed',
           'raw_details':
             'message\nSome unsupported unicode characters: '
@@ -54,7 +42,7 @@
           'start_line': 6,
           'end_line': 6,
           'annotation_level': 'failure',
-          'message': 'unsupported-unicode.xml',
+          'message': 'unsupported-unicode.xml\u2003[took 1s]',
           'title': 'test 6 with error',
           'raw_details':
             'Some unsupported unicode characters: '
@@ -65,7 +53,7 @@
           'start_line': 7,
           'end_line': 7,
           'annotation_level': 'failure',
-          'message': 'unsupported-unicode.xml',
+          'message': 'unsupported-unicode.xml\u2003[took 1s]',
           'title': 'test 7 with error',
           'raw_details':
             'message\nSome unsupported unicode characters: '

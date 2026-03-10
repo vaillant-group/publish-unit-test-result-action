@@ -1,9 +1,12 @@
 import abc
 import dataclasses
+import io
+import json
 import os
 import pathlib
 import re
 import sys
+import tempfile
 import unittest
 from glob import glob
 from typing import Optional, List
@@ -18,9 +21,9 @@ from packaging.version import Version
 sys.path.append(str(pathlib.Path(__file__).resolve().parent.parent))
 sys.path.append(str(pathlib.Path(__file__).resolve().parent))
 
-from publish import available_annotations, none_annotations
-from publish.junit import is_junit, parse_junit_xml_files, process_junit_xml_elems, get_results, get_result, get_content, \
-    get_message, Disabled, JUnitTreeOrParseError, ParseError
+from publish import __version__, available_annotations, none_annotations
+from publish.junit import is_junit, parse_junit_xml_files, adjust_prefix, process_junit_xml_elems, get_results, \
+    get_result, get_content,  get_message, Disabled, JUnitTreeOrParseError, ParseError
 from publish.unittestresults import ParsedUnitTestResults, UnitTestCase
 from publish_test_results import get_test_results, get_stats, get_conclusion
 from publish.publisher import Publisher
@@ -97,6 +100,21 @@ class JUnitXmlParseTest:
         else:
             return filename
 
+    def test_adjust_prefix(self):
+        self.assertEqual(adjust_prefix("file", "+"), "file")
+        self.assertEqual(adjust_prefix("file", "+."), ".file")
+        self.assertEqual(adjust_prefix("file", "+./"), "./file")
+        self.assertEqual(adjust_prefix("file", "+path/"), "path/file")
+
+        self.assertEqual(adjust_prefix("file", "-"), "file")
+        self.assertEqual(adjust_prefix(".file", "-."), "file")
+        self.assertEqual(adjust_prefix("./file", "-./"), "file")
+        self.assertEqual(adjust_prefix("path/file", "-path/"), "file")
+        self.assertEqual(adjust_prefix("file", "-"), "file")
+        self.assertEqual(adjust_prefix("file", "-."), "file")
+        self.assertEqual(adjust_prefix("file", "-./"), "file")
+        self.assertEqual(adjust_prefix("file", "-path/"), "file")
+
     def do_test_parse_and_process_files(self, filename: str):
         for locale in [None, 'en_US.UTF-8', 'de_DE.UTF-8']:
             with self.test.subTest(file=self.shorten_filename(filename), locale=locale):
@@ -118,9 +136,14 @@ class JUnitXmlParseTest:
                         actual_results = process_junit_xml_elems([(self.shorten_filename(path.resolve().as_posix()), actual)], add_suite_details=True)
                         self.assert_expectation(self.test, pp.pformat(actual_results, indent=2), results_expectation_path)
 
+                        json_expectation_path = path.parent / (path.stem + '.results.json')
                         annotations_expectation_path = path.parent / (path.stem + '.annotations')
-                        actual_annotations = self.get_check_runs(actual_results)
-                        self.assert_expectation(self.test, pp.pformat(actual_annotations, indent=2), annotations_expectation_path)
+                        actual_annotations, data = self.get_check_runs(actual_results)
+                        self.assert_expectation(self.test, pp.pformat(actual_annotations, indent=2).replace(__version__, 'VERSION'), annotations_expectation_path)
+
+                        actual_json = io.StringIO()
+                        Publisher.write_json(data, actual_json, Test.get_settings())
+                        self.assert_expectation(self.test, actual_json.getvalue(), json_expectation_path)
 
     def test_parse_and_process_files(self):
         for file in self.get_test_files() + self.unsupported_files():
@@ -146,8 +169,10 @@ class JUnitXmlParseTest:
                     results = process_junit_xml_elems([(cls.shorten_filename(path.resolve().as_posix()), actual)], add_suite_details=True)
                     w.write(pp.pformat(results, indent=2))
                 with open(path.parent / (path.stem + '.annotations'), 'w', encoding='utf-8') as w:
-                    check_runs = cls.get_check_runs(results)
-                    w.write(pp.pformat(check_runs, indent=2))
+                    check_runs, data = cls.get_check_runs(results)
+                    w.write(pp.pformat(check_runs, indent=2).replace(__version__, 'VERSION'))
+                with open(path.parent / (path.stem + '.results.json'), 'w', encoding='utf-8') as w:
+                    Publisher.write_json(data, w, Test.get_settings())
 
     @classmethod
     def get_check_runs(cls, parsed):
@@ -186,15 +211,17 @@ class JUnitXmlParseTest:
 
         # makes gzipped digest deterministic
         with mock.patch('gzip.time.time', return_value=0):
-            Publisher(settings, gh, gha).publish(stats, results.case_results, conclusion)
+            publisher = Publisher(settings, gh, gha)
+            publisher.publish(stats, results.case_results, conclusion)
+            data = publisher.get_publish_data(stats, results.case_results, conclusion).with_check_url('html')
 
-        return check_runs
+        return check_runs, data
 
     @staticmethod
     def prettify_exception(exception) -> str:
         exception = exception.__repr__()
         exception = re.sub(r'\r?\n\r?', r'\\n', exception)
-        exception = re.sub(r'\(', ': ', exception, 1)
+        exception = re.sub(r'\(', ': ', exception, count=1)
         exception = re.sub(r'file:.*/', '', exception)
         exception = re.sub(r',?\s*\)\)$', ')', exception)
         return exception
@@ -299,7 +326,7 @@ class TestJunit(unittest.TestCase, JUnitXmlParseTest):
         for time_factor in [1.0, 10.0, 60.0, 0.1, 0.001]:
             with self.subTest(time_factor=time_factor):
                 self.assertEqual(
-                    process_junit_xml_elems(parse_junit_xml_files([result_file], False, False), time_factor),
+                    process_junit_xml_elems(parse_junit_xml_files([result_file], False, False), time_factor=time_factor),
                     ParsedUnitTestResults(
                         files=1,
                         errors=[],
@@ -376,6 +403,32 @@ class TestJunit(unittest.TestCase, JUnitXmlParseTest):
                                 stderr=None,
                                 time=0.001 * time_factor
                             )
+                        ]
+                    ))
+
+    def test_process_parse_junit_xml_files_with_test_file_prefix(self):
+        result_file = str(test_files_path / 'pytest' / 'junit.fail.xml')
+        for prefix in ["+python/", "-test/", "-src"]:
+            with self.subTest(prefix=prefix):
+                test_file = adjust_prefix('test/test_spark.py', prefix)
+                self.assertEqual(
+                    process_junit_xml_elems(parse_junit_xml_files([result_file], False, False), test_file_prefix=prefix),
+                    ParsedUnitTestResults(
+                        files=1,
+                        errors=[],
+                        suites=1,
+                        suite_tests=5,
+                        suite_skipped=1,
+                        suite_failures=1,
+                        suite_errors=0,
+                        suite_time=2,
+                        suite_details=[],
+                        cases=[
+                            UnitTestCase(result_file=result_file, test_file=test_file, line=1412, class_name='test.test_spark.SparkTests', test_name='test_check_shape_compatibility', result='success', message=None, content=None, stdout=None, stderr=None, time=6.435),
+                            UnitTestCase(result_file=result_file, test_file=test_file, line=1641, class_name='test.test_spark.SparkTests', test_name='test_get_available_devices', result='skipped', message='get_available_devices only supported in Spark 3.0 and above', content='/horovod/test/test_spark.py:1642: get_available_devices only\n                supported in Spark 3.0 and above\n            ', stdout=None, stderr=None, time=0.001),
+                            UnitTestCase(result_file=result_file, test_file=test_file, line=1102, class_name='test.test_spark.SparkTests', test_name='test_get_col_info', result='success', message=None, content=None, stdout=None, stderr=None, time=6.417),
+                            UnitTestCase(result_file=result_file, test_file=test_file, line=819, class_name='test.test_spark.SparkTests', test_name='test_rsh_events', result='failure', message='self = <test_spark.SparkTests testMethod=test_rsh_events>      def test_rsh_events(self): >       self.do_test_rsh_events(3)  test_spark.py:821:  _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  test_spark.py:836: in do_test_rsh_events     self.do_test_rsh(command, 143, events=events) test_spark.py:852: in do_test_rsh     self.assertEqual(expected_result, res) E   AssertionError: 143 != 0', content='self = <test_spark.SparkTests testMethod=test_rsh_events>\n\n                def test_rsh_events(self):\n                > self.do_test_rsh_events(3)\n\n                test_spark.py:821:\n                _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _\n                test_spark.py:836: in do_test_rsh_events\n                self.do_test_rsh(command, 143, events=events)\n                test_spark.py:852: in do_test_rsh\n                self.assertEqual(expected_result, res)\n                E AssertionError: 143 != 0\n            ', stdout=None, stderr=None, time=7.541),
+                            UnitTestCase(result_file=result_file, test_file=test_file, line=813, class_name='test.test_spark.SparkTests', test_name='test_rsh_with_non_zero_exit_code', result='success', message=None, content=None, stdout=None, stderr=None, time=1.514)
                         ]
                     ))
 

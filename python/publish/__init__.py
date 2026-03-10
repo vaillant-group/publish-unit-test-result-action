@@ -5,17 +5,20 @@ import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import List, Any, Union, Optional, Tuple, Mapping, Iterator, Set, Iterable
+from typing import List, Any, Union, Optional, Tuple, Mapping, Iterator, Set, Iterable, Dict
 
 from publish.unittestresults import Numeric, UnitTestSuite, UnitTestCaseResults, UnitTestRunResults, \
     UnitTestRunDeltaResults, UnitTestRunResultsOrDeltaResults, ParseError
+
+# keep the version in sync with action.yml and docker/action.yml
+__version__ = 'v2.23.0'
 
 logger = logging.getLogger('publish')
 digest_prefix = '[test-results]:data:'
 digest_mime_type = 'application/gzip'
 digest_encoding = 'base64'
 digest_header = f'{digest_prefix}{digest_mime_type};{digest_encoding},'
-digit_space = '  '
+digit_space = ' '
 punctuation_space = ' '
 
 comment_mode_off = 'off'
@@ -146,6 +149,24 @@ class SomeTestChanges:
         if removed is None or skipped_before is None:
             return None
         return skipped_before.intersection(removed)
+
+
+def get_json_path(json: Dict[str, Any], path: Union[str, List[str]]) -> Any:
+    if isinstance(path, str):
+        path = path.split('.')
+
+    if path[0] not in json:
+        return None
+
+    elem = json[path[0]]
+
+    if len(path) > 1:
+        if isinstance(elem, dict):
+            return get_json_path(elem, path[1:])
+        else:
+            return None
+    else:
+        return elem
 
 
 def utf8_character_length(c: int) -> int:
@@ -320,7 +341,7 @@ def as_stat_number(number: Optional[Union[int, Numeric]],
         return 'N/A'
 
 
-def as_stat_duration(duration: Optional[Union[int, Numeric]], label=None) -> str:
+def as_stat_duration(duration: Optional[Union[float, int, Numeric]], label=None) -> str:
     if duration is None:
         if label:
             return f'N/A {label}'
@@ -419,18 +440,17 @@ def get_short_summary(stats: UnitTestRunResults) -> str:
 def get_link_and_tooltip_label_md(label: str, tooltip: str) -> str:
     return '[{label}]({link} "{tooltip}")'.format(
         label=label,
-        # bump the version if you change the target of this link (if it did not exist already) or change the section
-        link='https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols',
+        link=f'https://github.com/EnricoMi/publish-unit-test-result-action/blob/{__version__}/README.md#the-symbols',
         tooltip=tooltip
     )
 
 
 all_tests_label_md = 'tests'
-passed_tests_label_md = get_link_and_tooltip_label_md(':heavy_check_mark:', 'passed tests')
-skipped_tests_label_md = get_link_and_tooltip_label_md(':zzz:', 'skipped / disabled tests')
-failed_tests_label_md = get_link_and_tooltip_label_md(':x:', 'failed tests')
-test_errors_label_md = get_link_and_tooltip_label_md(':fire:', 'test errors')
-duration_label_md = get_link_and_tooltip_label_md(':stopwatch:', 'duration of all tests')
+passed_tests_label_md = '✅'
+skipped_tests_label_md = '💤'
+failed_tests_label_md = '❌'
+test_errors_label_md = '🔥'
+duration_label_md = '⏱️'
 
 
 def get_short_summary_md(stats: UnitTestRunResultsOrDeltaResults) -> str:
@@ -617,7 +637,7 @@ def get_long_summary_with_runs_md(stats: UnitTestRunResultsOrDeltaResults,
         runs_error=as_stat_number(stats.runs_error, error_digits, error_delta_digits, test_errors_label_md)
     ) if get_magnitude(stats.runs_error) else ''
     runs_line = '{runs} {runs_succ} {runs_skip} {runs_fail}{runs_error_part}\n'.format(
-        runs=as_stat_number(stats.runs, files_digits, files_delta_digits, 'runs '),
+        runs=as_stat_number(stats.runs, files_digits, files_delta_digits, 'runs '),
         runs_succ=as_stat_number(stats.runs_succ, success_digits, success_delta_digits, passed_tests_label_md),
         runs_skip=as_stat_number(stats.runs_skip, skip_digits, skip_delta_digits, skipped_tests_label_md),
         runs_fail=as_stat_number(stats.runs_fail, fail_digits, fail_delta_digits, failed_tests_label_md),
@@ -778,12 +798,12 @@ def get_case_annotation(messages: CaseMessages,
                      for s in messages[key]
                      for m in messages[key][s]
                      for case in messages[key][s][m]])
-    same_result_files = [case.result_file
+    same_result_files = {case.result_file: case.time
                          for case in (messages[key][state][message] if report_individual_runs else
                                       [c
                                        for m in messages[key][state]
                                        for c in messages[key][state][m]])
-                         if case.result_file]
+                         if case.result_file}
     test_file = case.test_file
     line = case.line or 0
     test_name = case.test_name if case.test_name else 'Unknown test'
@@ -822,7 +842,8 @@ def get_case_annotation(messages: CaseMessages,
         start_column=None,
         end_column=None,
         annotation_level=level,
-        message='\n'.join(sorted(same_result_files)),
+        message='\n'.join([file if time is None else f'{file} [took {as_stat_duration(time)}]'
+                           for file, time in sorted(same_result_files.items())]),
         title=title,
         raw_details='\n'.join(details) if details else None
     )
@@ -842,13 +863,13 @@ def get_case_annotations(case_results: UnitTestCaseResults,
 
 def get_error_annotation(error: ParseError) -> Annotation:
     return Annotation(
-        path=error.file,
+        path=error.file or '/',
         start_line=error.line or 0,
         end_line=error.line or 0,
         start_column=error.column,
         end_column=error.column,
         annotation_level='failure',
-        message=error.message,
+        message=error.message or '',
         title=f'Error processing result file',
         raw_details=error.file
     )
@@ -861,14 +882,14 @@ def get_error_annotations(parse_errors: List[ParseError]) -> List[Annotation]:
 def get_suite_annotations_for_suite(suite: UnitTestSuite, with_suite_out_logs: bool, with_suite_err_logs: bool) -> List[Annotation]:
     return [
         Annotation(
-            path=suite.name,
+            path=suite.name or '/',
             start_line=0,
             end_line=0,
             start_column=None,
             end_column=None,
             annotation_level='warning' if source == 'stderr' else 'notice',
-            message=f'Test suite {suite.name} has the following {source} output (see Raw output).',
-            title=f'Logging on {source} of test suite {suite.name}',
+            message=f'Test suite {suite.name or "<unknown>"} has the following {source} output (see Raw output).',
+            title=f'Logging on {source} of test suite {suite.name or "<unknown>"}',
             raw_details=details
         )
         for details, source in ([(suite.stdout, 'stdout')] if with_suite_out_logs else []) +

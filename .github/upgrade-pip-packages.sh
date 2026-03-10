@@ -2,13 +2,13 @@
 set -euo pipefail
 
 base="$(dirname "$0")"
+python_minor_version="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 
-pip install --upgrade --force pip==22.0.0
-pip install --upgrade --upgrade-strategy eager -r "$base/../python/requirements-direct.txt" -c "$base/../python/constraints.txt"
+pip install --upgrade --force pip==24.0.0
+pip install --upgrade --upgrade-strategy eager -r "$base/../python/requirements.txt"
 
 pip install pipdeptree
-grep -e "^#" -e ";" "$base/../python/requirements-direct.txt" > "$base/../python/requirements.txt"
-pipdeptree --packages="$(grep -v "^#" "$base/../python/requirements-direct.txt" | sed -e "s/;.*//" -e "s/=.*//g" | paste -s -d ,)" --freeze >> "$base/../python/requirements.txt"
+pipdeptree --packages="$(sed -e "s/;.*//" -e "s/=.*//g" "$base/../python/requirements.txt" | paste -s -d ,)" --freeze > "$base/../python/requirements-$python_minor_version.txt"
 
-git diff "$base/../python/requirements.txt"
+git diff "$base/../python/requirements-$python_minor_version.txt"
 

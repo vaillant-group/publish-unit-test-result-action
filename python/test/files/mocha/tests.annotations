@@ -7,21 +7,9 @@
     'output': {
       'title': '1 errors, 1 fail, 1 skipped, 2 pass in 12s',
       'summary':
-        '5 tests\u2002\u2003\u20032 '
-        '[:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-re'
-        'sult-action/blob/v1.20/README.md#the-symbols "passed tests")\u2003\u2003'
-        '12s '
-        '[:stopwatch:](https://github.com/EnricoMi/publish-unit-test-result-ac'
-        'tion/blob/v1.20/README.md#the-symbols "duration of all tests")\n1 '
-        'suites\u2003\u20031 '
-        '[:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/b'
-        'lob/v1.20/README.md#the-symbols "skipped / disabled tests")\n1 files\u2004'
-        '\u2002\u2003\u20031 '
-        '[:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blo'
-        'b/v1.20/README.md#the-symbols "failed tests")\u2003\u20031 '
-        '[:fire:](https://github.com/EnricoMi/publish-unit-test-result-action/'
-        'blob/v1.20/README.md#the-symbols "test errors")\n\nResults for '
-        'commit commit s.\n\n'
+        '5 tests\u2002\u2003\u20032 ✅\u2003\u200312s ⏱️\n1 suites\u2003\u2003'
+        '1 💤\n1 files\u2004\u2002\u2003\u20031 ❌\u2003\u20031 🔥\n\nResults '
+        'for commit commit s.\n\n'
         '[test-results]:data:application/gzip;base64,H4sIAAAAAAAC/1WMOw6AIBAFr'
         '0KobSSx8TKGoMaNfMwClfHu8hXs3sxm56Y7yM3SmYwDodaD+2D1yB0YHZEFDhcXb1Pdi/'
         'VCBMGaOOEq31nsHORPbIgGi0Gvay/OPpe51RJ3scR9SxilwAUoi9iD0+cFI3viF94AAAA'
@@ -54,7 +42,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'failure',
-          'message': 'tests.json',
+          'message': 'tests.json\u2003[took 4s]',
           'title': 'Test .clone() should copy the title with error',
           'raw_details':
             "[31m[1mexpected[22m[39m [36m'To be cloned'[39m [31m[1mto "

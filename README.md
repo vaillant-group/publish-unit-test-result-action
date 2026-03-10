@@ -3,19 +3,16 @@
 [![CI/CD](https://github.com/EnricoMi/publish-unit-test-result-action/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/EnricoMi/publish-unit-test-result-action/actions/workflows/ci-cd.yml)
 [![GitHub release badge](https://badgen.net/github/release/EnricoMi/publish-unit-test-result-action/stable)](https://github.com/EnricoMi/publish-unit-test-result-action/releases/latest)
 [![GitHub license badge](misc/badge-license.svg)](http://www.apache.org/licenses/LICENSE-2.0)
-[![GitHub Workflows badge](https://gist.github.com/EnricoMi/612cb538c14731f1a8fefe504f519395/raw/workflows.svg)](https://github.com/search?q=publish-unit-test-result-action+path%3A.github%2Fworkflows%2F+language%3AYAML+language%3AYAML&type=Code&l=YAML)
-[![Docker pulls badge](https://gist.github.com/EnricoMi/612cb538c14731f1a8fefe504f519395/raw/downloads.svg)](https://github.com/users/EnricoMi/packages/container/package/publish-unit-test-result-action)
+[![GitHub Workflows badge](https://gist.githubusercontent.com/EnricoMi/612cb538c14731f1a8fefe504f519395/raw/workflows.svg)](https://github.com/EnricoMi/publish-unit-test-result-action/network/dependents)
+[![Docker pulls badge](https://gist.githubusercontent.com/EnricoMi/612cb538c14731f1a8fefe504f519395/raw/downloads.svg)](https://github.com/users/EnricoMi/packages/container/package/publish-unit-test-result-action)
 
+![Arm badge](misc/badge-arm.svg)
 ![Ubuntu badge](misc/badge-ubuntu.svg)
 ![macOS badge](misc/badge-macos.svg)
 ![Windows badge](misc/badge-windows.svg)
-![JUnit badge](misc/badge-junit-xml.svg)
-![NUnit badge](misc/badge-nunit-xml.svg)
-![XUnit badge](misc/badge-xunit-xml.svg)
+![XML badge](misc/badge-xml.svg)
 ![TRX badge](misc/badge-trx.svg)
-![Dart badge](misc/badge-dart.svg)
-![Mocha badge](misc/badge-mocha.svg)
-
+![JS badge](misc/badge-js.svg)
 
 [![Test Results](https://gist.githubusercontent.com/EnricoMi/612cb538c14731f1a8fefe504f519395/raw/tests.svg)](https://gist.githubusercontent.com/EnricoMi/612cb538c14731f1a8fefe504f519395/raw/tests.svg)
 
@@ -23,12 +20,13 @@ This [GitHub Action](https://github.com/actions) analyses test result files and
 publishes the results on GitHub. It supports [JSON (Dart, Mocha), TRX (MSTest, VS) and XML (JUnit, NUnit, XUnit) file formats](#generating-test-result-files),
 and runs on Linux, macOS and Windows.
 
-You can add this action to your GitHub workflow for ![Ubuntu Linux](https://badgen.net/badge/icon/Ubuntu?icon=terminal&label) (e.g. `runs-on: ubuntu-latest`) runners:
+You can use this action with ![Ubuntu Linux](misc/badge-ubuntu.svg) runners (e.g. `runs-on: ubuntu-latest`)
+or ![ARM Linux](misc/badge-arm.svg) self-hosted runners that support Docker:
 
 ```yaml
 - name: Publish Test Results
   uses: EnricoMi/publish-unit-test-result-action@v2
-  if: always()
+  if: (!cancelled())
   with:
     files: |
       test-results/**/*.xml
@@ -36,29 +34,84 @@ You can add this action to your GitHub workflow for ![Ubuntu Linux](https://badg
       test-results/**/*.json
 ```
 
-Use this for ![macOS](https://badgen.net/badge/icon/macOS?icon=apple&label) (e.g. `runs-on: macos-latest`)
-and ![Windows](https://badgen.net/badge/icon/Windows?icon=windows&label) (e.g. `runs-on: windows-latest`) runners:
+See the [notes on running this action with absolute paths](#running-with-absolute-paths) if you cannot use relative test result file paths.
 
+Use this for ![macOS](misc/badge-macos.svg) (e.g. `runs-on: macos-latest`) runners (no Docker needed):
 ```yaml
 - name: Publish Test Results
-  uses: EnricoMi/publish-unit-test-result-action/composite@v2
-  if: always()
+  uses: EnricoMi/publish-unit-test-result-action/macos@v2
+  if: (!cancelled())
   with:
-    files: |
-      test-results/**/*.xml
-      test-results/**/*.trx
-      test-results/**/*.json
+    files: …
 ```
 
-See the [notes on running this action as a composite action](#running-as-a-composite-action) if you run it on Windows or macOS.
+… and ![Windows](misc/badge-windows.svg) (e.g. `runs-on: windows-latest`) runners (no Docker needed):
+```yaml
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action/windows@v2
+  if: (!cancelled())
+  with:
+    files: …
+```
 
-Also see the [notes on supporting pull requests from fork repositories and branches created by Dependabot](#support-fork-repositories-and-dependabot-branches).
+For Windows **without PowerShell** installed, there is the Bash shell variant:
+```yaml
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action/windows/bash@v2
+  if: (!cancelled())
+  with:
+    files: …
+```
 
-The `if: always()` clause guarantees that this action always runs, even if earlier steps (e.g., the test step) in your workflow fail.
+For **self-hosted** Linux GitHub Actions runners **without Docker** installed, please use:
+```yaml
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action/linux@v2
+  if: (!cancelled())
+  with:
+    files: …
+```
 
-***Note:** This action does not fail if tests failed. The action that executed the tests should
-fail on test failure. The published results however indicate failure if tests fail or errors occur.
-This behaviour is configurable.*
+See the [notes on running this action as a non-Docker action](#running-as-a-non-docker-action).
+
+If you see the `"Resource not accessible by integration"` error, you have to grant additional [permissions](#permissions), or
+[setup the support for pull requests from fork repositories and branches created by Dependabot](#support-fork-repositories-and-dependabot-branches).
+
+The `if: (!cancelled())` clause guarantees that this action always runs, even if earlier steps (e.g., the test step) in your workflow fail,
+but not if the workflow was cancelled.
+
+When run multiple times in one workflow, the [option](#configuration) `check_name` has to be set to a unique value for each instance.
+Otherwise, the multiple runs overwrite each other's results.
+
+***Note:** By default, this action does not fail if tests failed. This can be [configured](#configuration) via `action_fail`.
+The action that executed the tests should fail on test failure. The published results however indicate failure if tests fail or errors occur,
+which can be [configured](#configuration) via `fail_on`.*
+
+Thanks to the provided [typings](action-types.yml), it is possible to use this action in a type-safe way using
+[GitHub Workflows Kt](https://github.com/typesafegithub/github-workflows-kt), which allows writing workflow files using a type-safe Kotlin DSL.
+
+## Permissions
+
+Minimal [workflow job permissions](https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs#example-setting-permissions-for-a-specific-job)
+required by this action in **public** GitHub repositories are:
+
+```yaml
+permissions:
+  checks: write
+  pull-requests: write
+```
+
+The following permissions are required in **private** GitHub repos:
+
+```yaml
+permissions:
+  contents: read
+  issues: read
+  checks: write
+  pull-requests: write
+```
+
+With `comment_mode: off`, the `pull-requests: write` permission is not needed.
 
 ## Generating test result files
 
@@ -67,14 +120,14 @@ Check your favorite development and test environment for its JSON, TRX file or J
 
 |Test Environment |Language| JUnit<br/>XML | NUnit<br/>XML | XUnit<br/>XML | TRX<br/>file | JSON<br/>file |
 |-----------------|:------:|:---------:|:---------:|:---------:|:---:|:---:|
-|[Dart](https://github.com/dart-lang/test/blob/master/pkgs/test/doc/json_reporter.md)|Dart, Flutter| | | | | :heavy_check_mark: |
-|[Jest](https://jestjs.io/docs/configuration#default-reporter)|JavaScript|:heavy_check_mark:| | | | |
-|[Maven](https://maven.apache.org/surefire/maven-surefire-plugin/examples/junit.html)|Java, Scala, Kotlin|:heavy_check_mark:| | | | |
-|[Mocha](https://mochajs.org/#xunit)|JavaScript|:heavy_check_mark:| |[not xunit](https://github.com/mochajs/mocha/issues/4758)| | :heavy_check_mark: |
-|MSTest    |.Net|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:| |
-|[pytest](https://docs.pytest.org/en/latest/how-to/output.html#creating-junitxml-format-files)|Python|:heavy_check_mark:| | | | |
-|[sbt](https://www.scala-sbt.org/release/docs/Testing.html#Test+Reports)|Scala|:heavy_check_mark:| | | | |
-|Your favorite<br/>environment|Your favorite<br/>language|probably<br/>:heavy_check_mark:| | | | |
+|[Dart](https://github.com/dart-lang/test/blob/master/pkgs/test/doc/json_reporter.md)|Dart, Flutter| | | | |:white_check_mark:|
+|[Jest](https://jestjs.io/docs/configuration#default-reporter)|JavaScript|:white_check_mark:| | | | |
+|[Maven](https://maven.apache.org/surefire/maven-surefire-plugin/examples/junit.html)|Java, Scala, Kotlin|:white_check_mark:| | | | |
+|[Mocha](https://mochajs.org/#xunit)|JavaScript|:white_check_mark:| |[not xunit](https://github.com/mochajs/mocha/issues/4758)| |:white_check_mark:|
+|[MStest / dotnet](https://github.com/Microsoft/vstest-docs/blob/main/docs/report.md#syntax-of-default-loggers)|.Net|[:white_check_mark:](https://github.com/spekt/junit.testlogger#usage)|[:white_check_mark:](https://github.com/spekt/nunit.testlogger#usage)|[:white_check_mark:](https://github.com/spekt/xunit.testlogger#usage)|[:white_check_mark:](https://github.com/Microsoft/vstest-docs/blob/main/docs/report.md#syntax-of-default-loggers)| |
+|[pytest](https://docs.pytest.org/en/latest/how-to/output.html#creating-junitxml-format-files)|Python|:white_check_mark:| | | | |
+|[sbt](https://www.scala-sbt.org/release/docs/Testing.html#Test+Reports)|Scala|:white_check_mark:| | | | |
+|Your favorite<br/>environment|Your favorite<br/>language|probably<br/>:white_check_mark:| | | | |
 
 ## What is new in version 2
 
@@ -101,7 +154,7 @@ See workaround for `check_name`.
 
 ### Modes `create new` and `update last` removed for option `comment_mode`
 The action always updates an earlier pull request comment, which is the exact behaviour of mode `update last`.
-The configuration options `create new` and `update last` are therefore removed.
+The [configuration](#configuration) options `create new` and `update last` are therefore removed.
 
 **Impact:**
 An existing pull request comment is always updated.
@@ -123,10 +176,11 @@ Set `comment_mode` to `always` (the default) or `off`.
 
 ## Publishing test results
 
-Test results are published on GitHub at various (configurable) places:
+Test results are published on GitHub at various ([configurable](#configuration)) places:
 
 - as [a comment](#pull-request-comment) in related pull requests
 - as [a check](#commit-and-pull-request-checks) in the checks section of a commit and related pull requests
+- as [annotations](#commit-and-pull-request-annotations) in the checks section and changed files section of a commit and related pull requests
 - as [a job summary](#github-actions-job-summary) of the GitHub Actions workflow
 - as [a check summary](#github-actions-check-summary-of-a-commit) in the GitHub Actions section of the commit
 
@@ -157,6 +211,8 @@ Those are highlighted in pull request comments to easily spot unintended test re
 
 ***Note:** This requires `check_run_annotations` to be set to `all tests, skipped tests`.*
 
+Comments can be disabled with `comment_mode: off`.
+
 ### Commit and pull request checks
 
 The checks section of a commit and related pull requests list a short summary (here `1 fail, 1 skipped, …`),
@@ -170,6 +226,25 @@ Pull request checks:
 
 ![pull request checks example](misc/github-pull-request-checks.png)
 
+Check runs can be disabled with `check_run: false`.
+
+### Commit and pull request annotations
+
+Each failing test produces an annotation with failure details in the checks section of a commit:
+
+![annotations example check](misc/github-checks-annotation.png)
+
+and the changed files section of related pull requests:
+
+![annotations example changed files](misc/github-pull-request-changes-annotation.png)
+
+***Note:** Annotations for test files are only supported when test file paths in test result files are relative to the repository root.
+Use option `test_file_prefix` to add a prefix to, or remove a prefix from these file paths. See [Configuration](#configuration) section for details.*
+
+***Note:** Only the first failure of a test is shown. If you want to see all failures, set `report_individual_runs: "true"`.*
+
+Check run annotations can be disabled with `ignore_runs: true`.
+
 ### GitHub Actions job summary
 
 The results are added to the job summary page of the workflow that runs this action:
@@ -180,17 +255,15 @@ In presence of failures or errors, the job summary links to the respective [chec
 
 ***Note:** Job summary requires [GitHub Actions runner v2.288.0](https://github.com/actions/runner/releases/tag/v2.288.0) or above.*
 
+Job summaries can be disabled with `job_summary: false`.
+
 ### GitHub Actions check summary of a commit
 
 Test results are published in the GitHub Actions check summary of the respective commit:
 
 ![checks comment example](misc/github-checks-comment.png)
 
-Each failing test will produce an annotation with failure details:
-
-![annotations example](misc/github-checks-annotation.png)
-
-***Note:** Only the first failure of a test is shown. If you want to see all failures, set `report_individual_runs: "true"`.*
+Check runs can be disabled with `check_run: false`.
 
 ## The symbols
 [comment]: <> (This heading is linked to from method get_link_and_tooltip_label_md)
@@ -199,35 +272,13 @@ The symbols have the following meaning:
 
 |Symbol|Meaning|
 |:----:|-------|
-|<img src="https://github.githubassets.com/images/icons/emoji/unicode/2714.png" height="20"/>|A successful test or run|
+|<img src="https://github.githubassets.com/images/icons/emoji/unicode/2714.png" height="20"/>  :white_check_mark:|A successful test or run|
 |<img src="https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png" height="20"/>|A skipped test or run|
 |<img src="https://github.githubassets.com/images/icons/emoji/unicode/274c.png" height="20"/>|A failed test or run|
 |<img src="https://github.githubassets.com/images/icons/emoji/unicode/1f525.png" height="20"/>|An erroneous test or run|
 |<img src="https://github.githubassets.com/images/icons/emoji/unicode/23f1.png" height="20"/>|The duration of all tests or runs|
 
 ***Note:*** For simplicity, "disabled" tests count towards "skipped" tests.
-
-## Permissions
-
-Minimal permissions required by this action in **public** GitHub repositories are:
-
-```yaml
-permissions:
-  checks: write
-  pull-requests: write
-```
-
-The following permissions are required in **private** GitHub repos:
-
-```yaml
-permissions:
-  contents: read
-  issues: read
-  checks: write
-  pull-requests: write
-```
-
-With `comment_mode: off`, the `pull-requests: write` permission is not needed.
 
 ## Configuration
 
@@ -248,8 +299,8 @@ The list of most notable options:
 
 |Option|Default Value|Description|
 |:-----|:-----:|:----------|
-|`files`|_no default_|File patterns of test result files. Supports `*`, `**`, `?`, and `[]` character ranges. Use multiline string for multiple patterns. Patterns starting with `!` exclude the matching files. There have to be at least one pattern starting without a `!`.|
-|`check_name`|`"Test Results"`|An alternative name for the check result.|
+|`files`|_no default_|File patterns of test result files. Relative paths are known to work best, while the non-Docker action [also works with absolute paths](#running-with-absolute-paths). Supports `*`, `**`, `?`, and `[]` character ranges. Use multiline string for multiple patterns. Patterns starting with `!` exclude the matching files. There have to be at least one pattern starting without a `!`.|
+|`check_name`|`"Test Results"`|An alternative name for the check result. Required to be unique for each instance in one workflow.|
 |`comment_title`|same as `check_name`|An alternative name for the pull request comment.|
 |`comment_mode`|`always`|The action posts comments to pull requests that are associated with the commit. Set to:<br/>`always` - always comment<br/>`changes` - comment when changes w.r.t. the target branch exist<br/>`changes in failures` - when changes in the number of failures and errors exist<br/>`changes in errors` - when changes in the number of (only) errors exist<br/>`failures` - when failures or errors exist<br/>`errors` - when (only) errors exist<br/>`off` - to not create pull request comments.|
 |`large_files`|`false` unless<br/>`ignore_runs` is `true`|Support for large files is enabled when set to `true`. Defaults to `false`, unless ignore_runs is `true`.|
@@ -263,8 +314,10 @@ The list of most notable options:
 |`commit`|`${{env.GITHUB_SHA}}`|An alternative commit SHA to which test results are published. The `push` and `pull_request`events are handled, but for other [workflow events](https://docs.github.com/en/free-pro-team@latest/actions/reference/events-that-trigger-workflows#push) `GITHUB_SHA` may refer to different kinds of commits. See [GitHub Workflow documentation](https://docs.github.com/en/free-pro-team@latest/actions/reference/events-that-trigger-workflows) for details.|
 |`github_token`|`${{github.token}}`|An alternative GitHub token, other than the default provided by GitHub Actions runner.|
 |`github_retries`|`10`|Requests to the GitHub API are retried this number of times. The value must be a positive integer or zero.|
+|`ssl_verify`|`true`|Either `true` or `false`, in which case it controls whether to verify the Github server’s TLS certificate, or a string, in which case it must be a path to a CA bundle to use. Default is `true`.|
 |`seconds_between_github_reads`|`0.25`|Sets the number of seconds the action waits between concurrent read requests to the GitHub API.|
 |`seconds_between_github_writes`|`2.0`|Sets the number of seconds the action waits between concurrent write requests to the GitHub API.|
+|`secondary_rate_limit_wait_seconds`|`60.0`|Sets the number of seconds to wait before retrying secondary rate limit errors. If not set, the default defined in the PyGithub library is used (currently 60 seconds).|
 |`pull_request_build`|`"merge"`|As part of pull requests, GitHub builds a merge commit, which combines the commit and the target branch. If tests ran on the actual pushed commit, then set this to `"commit"`.|
 |`event_file`|`${{env.GITHUB_EVENT_PATH}}`|An alternative event file to use. Useful to replace a `workflow_run` event file with the actual source event file.|
 |`event_name`|`${{env.GITHUB_EVENT_NAME}}`|An alternative event name to use. Useful to replace a `workflow_run` event name with the actual source event name: `${{ github.event.workflow_run.event }}`.|
@@ -276,8 +329,10 @@ The list of most notable options:
 
 |Option|Default Value|Description|
 |:-----|:-----:|:----------|
-|`time_unit`|`seconds`|Time values in the XML files have this unit. Supports `seconds` and `milliseconds`.|
-|`job_summary`|`true`| Set to `true`, the results are published as part of the [job summary page](https://github.blog/2022-05-09-supercharging-github-actions-with-job-summaries/) of the workflow run.|
+|`time_unit`|`seconds`|Time values in the test result files have this unit. Supports `seconds` and `milliseconds`.|
+|`test_file_prefix`|`none`|Paths in the test result files should be relative to the git repository for annotations to work best. This prefix is added to (if starting with "+"), or remove from (if starting with "-") test file paths. Examples: "+src/" or "-/opt/actions-runner".|
+|`check_run`|`true`|Set to `true`, the results are published as a check run, but it may not be associated with the workflow that ran this action.|
+|`job_summary`|`true`|Set to `true`, the results are published as part of the [job summary page](https://github.blog/2022-05-09-supercharging-github-actions-with-job-summaries/) of the workflow run.|
 |`compare_to_earlier_commit`|`true`|Test results are compared to results of earlier commits to show changes:<br/>`false` - disable comparison, `true` - compare across commits.'|
 |`test_changes_limit`|`10`|Limits the number of removed or skipped tests reported on pull request comments. This report can be disabled with a value of `0`.|
 |`report_individual_runs`|`false`|Individual runs of the same test may see different failures. Reports all individual failures when set `true`, and the first failure only otherwise.|
@@ -301,6 +356,28 @@ and removal, and `skipped tests` to detect new skipped and un-skipped tests, as 
 `check_run_annotations_branch` to contain your default branch.
 </details>
 
+<details>
+<summary>Options related to Docker</summary>
+
+You can control the Docker image used for the action as below. For this, you need to run the action as follows:
+
+```yaml
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action/docker@v2
+  if: (!cancelled())
+  with:
+    docker_registry: ghcr.io
+    files: …
+```
+
+| Option            |               Default Value                | Description                                                                                                      |
+|:------------------|:------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------|
+| `docker_registry` |                 `ghcr.io`                  | The docker registry to pull the pre-built action from. Defaults to the Github registry `ghcr.io`.                |
+| `docker_image`    | `enricomi/publish-unit-test-result-action` | The docker image name to pull the pre-built action from. Defaults to `enricomi/publish-unit-test-result-action`. |
+| `docker_tag`      |      *The same version as in `uses:`*      | The docker tag to pull the pre-built action from. This is usually not needed.                                    |
+| `docker_platform` |                                            | The platform to use when pulling the docker image.                                                               |
+</details>
+
 ## JSON result
 
 The gathered test information are accessible as JSON via [GitHub Actions steps outputs](https://docs.github.com/en/actions/learn-github-actions/contexts#steps-context) string or JSON file.
@@ -314,7 +391,7 @@ The `json` output of the action can be accessed through the expression `steps.<i
 - name: Publish Test Results
   uses: EnricoMi/publish-unit-test-result-action@v2
   id: test-results
-  if: always()
+  if: (!cancelled())
   with:
     files: "test-results/**/*.xml"
 
@@ -326,7 +403,7 @@ Here is an example JSON:
 ```json
 {
   "title": "4 parse errors, 4 errors, 23 fail, 18 skipped, 227 pass in 39m 12s",
-  "summary": "  24 files  ±0      4 errors  21 suites  ±0   39m 12s [:stopwatch:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols \"duration of all tests\") ±0s\n272 tests ±0  227 [:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols \"passed tests\") ±0  18 [:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols \"skipped / disabled tests\") ±0  23 [:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols \"failed tests\") ±0  4 [:fire:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols \"test errors\") ±0 \n437 runs  ±0  354 [:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols \"passed tests\") ±0  53 [:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols \"skipped / disabled tests\") ±0  25 [:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols \"failed tests\") ±0  5 [:fire:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v1.20/README.md#the-symbols \"test errors\") ±0 \n\nResults for commit 11c02e56. ± Comparison against earlier commit d8ce4b6c.\n",
+  "summary": "  24 files  ±0      4 errors  21 suites  ±0   39m 12s [:stopwatch:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v2.6.1/README.md#the-symbols \"duration of all tests\") ±0s\n272 tests ±0  227 [:white_check_mark:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v2.6.1/README.md#the-symbols \"passed tests\") ±0  18 [:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v2.6.1/README.md#the-symbols \"skipped / disabled tests\") ±0  23 [:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v2.6.1/README.md#the-symbols \"failed tests\") ±0  4 [:fire:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v2.6.1/README.md#the-symbols \"test errors\") ±0 \n437 runs  ±0  354 [:white_check_mark:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v2.6.1/README.md#the-symbols \"passed tests\") ±0  53 [:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v2.6.1/README.md#the-symbols \"skipped / disabled tests\") ±0  25 [:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v2.6.1/README.md#the-symbols \"failed tests\") ±0  5 [:fire:](https://github.com/EnricoMi/publish-unit-test-result-action/blob/v2.6.1/README.md#the-symbols \"test errors\") ±0 \n\nResults for commit 11c02e56. ± Comparison against earlier commit d8ce4b6c.\n",
   "conclusion": "success",
   "stats": {
     "files": 24,
@@ -383,7 +460,7 @@ is not easily available, e.g. when [creating a badge from test results](#create-
 <details>
 <summary>Access JSON via file</summary>
 
-The optional `json_file` allows to configure a file where extended JSON information are to be written.
+The optional `json_file` allows to [configure](#configuration) a file where extended JSON information are to be written.
 Compared to `"Access JSON via step outputs"` above, `errors` and `annotations` contain more information
 than just the number of errors and annotations, respectively.
 
@@ -483,10 +560,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -494,8 +571,8 @@ jobs:
         run: python -m pytest test --junit-xml pytest.xml
 
       - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v2
+        if: (!cancelled())
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
           name: Test Results (Python ${{ matrix.python-version }})
           path: pytest.xml
@@ -515,11 +592,11 @@ jobs:
 
       # only needed for private repository
       issues: read
-    if: always()
+    if: (!cancelled())
 
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
           path: artifacts
 
@@ -560,7 +637,7 @@ event_file:
   runs-on: ubuntu-latest
   steps:
   - name: Upload
-    uses: actions/upload-artifact@v2
+    uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
     with:
       name: Event File
       path: ${{ github.event_path }}
@@ -571,8 +648,8 @@ Adjust the value of `path` to fit your setup:
 
 ```yaml
 - name: Upload Test Results
-  if: always()
-  uses: actions/upload-artifact@v2
+  if: (!cancelled())
+  uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
   with:
     name: Test Results
     path: |
@@ -611,7 +688,7 @@ jobs:
   test-results:
     name: Test Results
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion != 'skipped'
+    if: github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure'
 
     permissions:
       checks: write
@@ -630,19 +707,10 @@ jobs:
 
     steps:
       - name: Download and Extract Artifacts
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-        run: |
-           mkdir -p artifacts && cd artifacts
-
-           artifacts_url=${{ github.event.workflow_run.artifacts_url }}
-
-           gh api --paginate "$artifacts_url" -q '.artifacts[] | [.name, .archive_download_url] | @tsv' | while read artifact
-           do
-             IFS=$'\t' read name url <<< "$artifact"
-             gh api $url > "$name.zip"
-             unzip -d "$name" "$name.zip"
-           done
+        uses: dawidd6/action-download-artifact@fe9d59ce33ce92db8a6ac90b2c8be6b6d90417c8  # v15
+        with:
+           run_id: ${{ github.event.workflow_run.id }}
+           path: artifacts
 
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
@@ -655,6 +723,49 @@ jobs:
 
 Note: Running this action on `pull_request_target` events is [dangerous if combined with code checkout and code execution](https://securitylab.github.com/research/github-actions-preventing-pwn-requests).
 This event is therefore not use here intentionally!
+</details>
+
+## Running with multiple event types (pull_request, push, schedule, …)
+
+This action comments on a pull request each time it is executed via any event type.
+When run for more than one event type, runs will overwrite earlier pull request comments.
+
+Note that `pull_request` events may produce different test results than any other event type.
+The `pull_request` event runs the workflow on a merge commit, i.e. the commit merged into the target branch.
+All other event types run on the commit itself.
+
+If you want to distinguish between test results from `pull_request` and `push`, or want to distinguish the original test results
+of the `push` to master from subsequent `schedule` events, you may want to add the following to your workflow.
+
+<details>
+<summary>There are two possible ways to avoid the publish action to overwrite results from other event types:</summary>
+
+### Test results per event type
+
+Add the event name to `check_name` to avoid different event types overwriting each other's results:
+
+```yaml
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  if: (!cancelled())
+  with:
+    check_name: "Test Results (${{ github.event.workflow_run.event || github.event_name }})"
+    files: "test-results/**/*.xml"
+```
+
+### Pull request comments only for pull_request events
+
+Disabling the pull request comment mode (`"off"`) for events other than `pull_request` avoids that any other event type overwrites pull request comments:
+
+```yaml
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  if: (!cancelled())
+  with:
+    # set comment_mode to "always" for pull_request event, set to "off" for all other event types
+    comment_mode: ${{ (github.event.workflow_run.event == 'pull_request' || github.event_name == 'pull_request') && 'always' || 'off' }}
+    files: "test-results/**/*.xml"
+```
 </details>
 
 ## Create a badge from test results
@@ -671,7 +782,7 @@ steps:
 - name: Publish Test Results
   uses: EnricoMi/publish-unit-test-result-action@v2
   id: test-results
-  if: always()
+  if: (!cancelled())
   with:
     files: "test-results/**/*.xml"
 
@@ -691,7 +802,7 @@ steps:
     esac
 
 - name: Create badge
-  uses: emibcn/badge-action@d6f51ff11b5c3382b3b88689ae2d6db22d9737d1
+  uses: emibcn/badge-action@808173dd03e2f30c980d03ee49e181626088eee8  # v2.0.3
   with:
     label: Tests
     status: '${{ fromJSON( steps.test-results.outputs.json ).formatted.stats.tests }} tests, ${{ fromJSON( steps.test-results.outputs.json ).formatted.stats.runs }} runs: ${{ fromJSON( steps.test-results.outputs.json ).conclusion }}'
@@ -703,7 +814,7 @@ steps:
   if: >
     github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master' ||
     github.event_name != 'workflow_run' && github.ref == 'refs/heads/master'
-  uses: andymckay/append-gist-action@1fbfbbce708a39bd45846f0955ed5521f2099c6d
+  uses: andymckay/append-gist-action@ab30bf28df67017c7ad696500b218558c7c04db3  # v0.3
   with:
     token: ${{ secrets.GIST_TOKEN }}
     gistURL: https://gist.githubusercontent.com/{user}/{id}
@@ -717,71 +828,94 @@ Set the `gistURL` to the Gist that you want to write the badge file to, in the f
 You can then use the badge via this URL: https://gist.githubusercontent.com/{user}/{id}/raw/badge.svg
 </details>
 
-## Running as a composite action
+## Running with absolute paths
 
-Running this action as a composite action allows to run it on various operating systems as it
-does not require Docker. The composite action, however, requires a Python3 environment to be setup
-on the action runner. All GitHub-hosted runners (Ubuntu, Windows Server and macOS) provide a suitable
-Python3 environment out-of-the-box.
+It is known that this action works best with relative paths (e.g. `test-results/**/*.xml`),
+but most absolute paths (e.g. `/tmp/test-results/**/*.xml`) require to use the non-Docker variant
+of this action:
+
+    uses: EnricoMi/publish-unit-test-result-action/linux@v2
+    uses: EnricoMi/publish-unit-test-result-action/macos@v2
+    uses: EnricoMi/publish-unit-test-result-action/windows@v2
+
+If you have to use absolute paths with the Docker variant of this action (`uses: EnricoMi/publish-unit-test-result-action@v2`),
+you have to copy files to a relative path first, and then use the relative path:
+
+```yaml
+- name: Copy Test Results
+  if: (!cancelled())
+  run: |
+    cp -Lpr /tmp/test-results test-results
+  shell: bash
+
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  if: (!cancelled())
+  with:
+     files: |
+        test-results/**/*.xml
+        test-results/**/*.trx
+        test-results/**/*.json
+```
+
+Using the Docker variant of this action is recommended as it starts up much quicker.
+
+## Running as a non-Docker action
+
+Running this action as below allows to run it on action runners that do not provide Docker:
+
+    uses: EnricoMi/publish-unit-test-result-action/linux@v2
+    uses: EnricoMi/publish-unit-test-result-action/macos@v2
+    uses: EnricoMi/publish-unit-test-result-action/windows@v2
+
+These actions, however, require a Python3 environment to be setup on the action runner.
+All GitHub-hosted runners (Ubuntu, Windows Server and macOS) provide a suitable Python3 environment out-of-the-box.
 
 Self-hosted runners may require setting up a Python environment first:
 
 ```yaml
 - name: Setup Python
-  uses: actions/setup-python@v4
+  uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
   with:
     python-version: 3.8
 ```
 
-Self-hosted runners for Windows require Bash shell to be installed. Easiest way to have one is by installing
-Git for Windows, which comes with Git BASH. Make sure that the location of `bash.exe` is part of the `PATH`
-environment variable seen by the self-hosted runner.
+Start-up of the action is faster with `virtualenv` or `venv` package installed.
 
-<details>
-<summary>Isolating composite action from your workflow</summary>
+## Running as a composite action
 
-Note that the composite action modifies this Python environment by installing dependency packages.
-If this conflicts with actions that later run Python in the same workflow (which is a rare case),
-it is recommended to run this action as the last step in your workflow, or to run it in an isolated workflow.
-Running it in an isolated workflow is similar to the workflows shown in [Use with matrix strategy](#use-with-matrix-strategy).
+Running this action via:
 
-To run the composite action in an isolated workflow, your CI workflow should upload all test result files:
+    uses: EnricoMi/publish-unit-test-result-action/composite@v2
 
-```yaml
-build-and-test:
-  name: "Build and Test"
-  runs-on: macos-latest
+is **deprecated**, please use an action appropriate for your operating system and shell:
 
-  steps:
-  - …
-  - name: Upload Test Results
-    if: always()
-    uses: actions/upload-artifact@v2
-    with:
-      name: Test Results
-      path: "test-results/**/*.xml"
-```
+- Linux (Bash shell): `uses: EnricoMi/publish-unit-test-result-action/linux@v2`
+- macOS (Bash shell): `uses: EnricoMi/publish-unit-test-result-action/macos@v2`
+- Windows (PowerShell): `uses: EnricoMi/publish-unit-test-result-action/windows@v2`
+- Windows (Bash shell): `uses: EnricoMi/publish-unit-test-result-action/windows/bash@v2`
 
-Your dedicated publish-test-results workflow then downloads these files and runs the action there:
+These are non-Docker variations of this action. For details, see section ["Running as a non-Docker action"](#running-as-a-non-docker-action) above.
+
+The composite action was able to run on any operating system, as long as Bash shell is installed.
+The same behaviour can be achieved with multiple steps, each for a specific operating system:
 
 ```yaml
-publish-test-results:
-  name: "Publish Tests Results"
-  needs: build-and-test
-  runs-on: windows-latest
-  # the build-and-test job might be skipped, we don't need to run this job then
-  if: success() || failure()
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action/linux@v2
+  if: runner.os == 'Linux'
+  with:
+    files: test-results/**/*.xml
 
-  steps:
-    - name: Download Artifacts
-      uses: actions/download-artifact@v2
-      with:
-        path: artifacts
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action/macos@v2
+  if: runner.os == 'macOS'
+  with:
+    files: test-results/**/*.xml
 
-    - name: Publish Test Results
-      uses: EnricoMi/publish-unit-test-result-action/composite@v2
-      with:
-        files: "artifacts/**/*.xml"
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action/windows/bash@v2
+  if: runner.os == 'Windows'
+  with:
+    files: test-results/**/*.xml
 ```
-</details>
-

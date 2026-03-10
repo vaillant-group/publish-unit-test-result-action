@@ -7,28 +7,9 @@
     'output': {
       'title': '1 errors, 1 fail, 1 skipped, 1 pass in 1s',
       'summary':
-        '1 files\u2004\u20031 suites\u2004\u2003\u20021s '
-        '[:stopwatch:](https://github.com/EnricoMi/publish-unit-test-result-ac'
-        'tion/blob/v1.20/README.md#the-symbols "duration of all tests")\n4 '
-        'tests\u20031 '
-        '[:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-re'
-        'sult-action/blob/v1.20/README.md#the-symbols "passed tests")\u20031 '
-        '[:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/b'
-        'lob/v1.20/README.md#the-symbols "skipped / disabled tests")\u20031 '
-        '[:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blo'
-        'b/v1.20/README.md#the-symbols "failed tests")\u20031 '
-        '[:fire:](https://github.com/EnricoMi/publish-unit-test-result-action/'
-        'blob/v1.20/README.md#the-symbols "test errors")\n4 runs\u2006\u2003'
-        '-2 '
-        '[:heavy_check_mark:](https://github.com/EnricoMi/publish-unit-test-re'
-        'sult-action/blob/v1.20/README.md#the-symbols "passed tests")\u20033 '
-        '[:zzz:](https://github.com/EnricoMi/publish-unit-test-result-action/b'
-        'lob/v1.20/README.md#the-symbols "skipped / disabled tests")\u20032 '
-        '[:x:](https://github.com/EnricoMi/publish-unit-test-result-action/blo'
-        'b/v1.20/README.md#the-symbols "failed tests")\u20031 '
-        '[:fire:](https://github.com/EnricoMi/publish-unit-test-result-action/'
-        'blob/v1.20/README.md#the-symbols "test errors")\n\nResults for '
-        'commit commit s.\n\n'
+        '1 files\u2004\u20031 suites\u2004\u2003\u20021s ⏱️\n4 tests\u20031 ✅\u2003'
+        '1 💤\u20031 ❌\u20031 🔥\n4 runs\u200a\u2003-2 ✅\u20033 💤\u20032 ❌\u2003'
+        '1 🔥\n\nResults for commit commit s.\n\n'
         '[test-results]:data:application/gzip;base64,H4sIAAAAAAAC/1WMOw6AIBAFr'
         '0KotfBTeRlCEONGPmYXKuPdlQhEujdvkrn4BkYTX9jQMU4RQoU1ogzgXcZXhKTmsgVFpf'
         '5S0AFnc2wSTHNoRI/5wehKL82S68d6fLmpcK5V/48pby2EF/JitEt+P6y+BE/eAAAA\n',
@@ -38,7 +19,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'failure',
-          'message': 'junit.multiresult.xml',
+          'message': 'junit.multiresult.xml\u2003[took 0s]',
           'title': 'test that errors (test class) with error',
           'raw_details': 'test teardown failure\nstdout'
         },
@@ -47,7 +28,7 @@
           'start_line': 0,
           'end_line': 0,
           'annotation_level': 'warning',
-          'message': 'junit.multiresult.xml',
+          'message': 'junit.multiresult.xml\u2003[took 0s]',
           'title': 'test that fails (test class) failed',
           'raw_details': 'test failure\nAssertion failed'
         },
